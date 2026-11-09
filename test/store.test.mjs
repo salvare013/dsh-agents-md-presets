@@ -280,3 +280,29 @@ test("回滚拒绝其它工作区的历史记录", async () => {
   );
   await fs.rm(base, { recursive: true, force: true });
 });
+
+test("预设名称不允许重复（忽略大小写与首尾空格，改名时排除自己）", async () => {
+  const { base, instance } = await freshStore();
+  const first = await instance.createPreset({ name: "Frontend", content: "a\n" });
+  await assert.rejects(
+    instance.createPreset({ name: "  frontend  ", content: "b\n" }),
+    (error) => error instanceof PresetError && error.code === "name-taken" && error.status === 409,
+  );
+  const second = await instance.createPreset({ name: "Backend", content: "c\n" });
+  await assert.rejects(
+    instance.updatePreset(second.id, { name: "FRONTEND" }),
+    (error) => error.code === "name-taken",
+  );
+  // 只把自己改成不同大小写不算重名。
+  const renamed = await instance.updatePreset(first.id, { name: "frontend" });
+  assert.equal(renamed.name, "frontend");
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("新建预设可以先不写正文，等编辑器来填", async () => {
+  const { base, instance } = await freshStore();
+  const draft = await instance.createPreset({ name: "草稿", description: "刚建好" });
+  assert.equal(draft.bytes, 0);
+  assert.equal((await instance.readPreset(draft.id)).content, "");
+  await fs.rm(base, { recursive: true, force: true });
+});

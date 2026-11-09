@@ -15,8 +15,8 @@ let routes;
 let ready;
 const openedFiles = [];
 
-const fakeOpen = (file) => {
-  if (!existsSync(file)) {
+const fakeOpen = (file, options = {}) => {
+  if (options.requireFile !== false && !existsSync(file)) {
     const error = new Error(`file not found: ${file}`);
     error.code = "file-not-found";
     throw error;
@@ -254,4 +254,38 @@ test("workspace/write 拒绝非字符串 content", async () => {
   const result = await call("workspace/write", { sessionId: "sess-1", content: 42 });
   assert.equal(result.status, 400);
   assert.equal(result.json.error.code, "content-required");
+});
+
+test("workspace/open 用编辑器打开工作区 AGENTS.md（文件不存在也能先打开）", async () => {
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), "# 编辑中\n");
+  const existing = await call("workspace/open", { sessionId: "sess-1" });
+  assert.equal(existing.status, 200);
+  assert.equal(existing.json.value.openedWith, "vscode");
+  assert.equal(existing.json.value.exists, true);
+  assert.ok(openedFiles.some((file) => file === existing.json.value.file));
+
+  await fs.rm(path.join(workspace, "AGENTS.md"));
+  const missing = await call("workspace/open", { sessionId: "sess-1" });
+  assert.equal(missing.status, 200);
+  assert.equal(missing.json.value.exists, false);
+  assert.ok(openedFiles.some((file) => file === missing.json.value.file));
+});
+
+test("同名预设：新建与改名都返回 409 name-taken", async () => {
+  const created = await call("preset/create", { name: "唯一名字", content: "# a\n" });
+  assert.equal(created.status, 200);
+
+  const duplicate = await call("preset/create", { name: "唯一名字", content: "# b\n" });
+  assert.equal(duplicate.status, 409);
+  assert.equal(duplicate.json.error.code, "name-taken");
+
+  const other = (await call("preset/create", { name: "另一个", content: "# c\n" })).json.value.preset;
+  const rename = await call("preset/update", { id: other.id, name: " 唯一名字 " });
+  assert.equal(rename.status, 409);
+  assert.equal(rename.json.error.code, "name-taken");
+
+  // 不带正文的新建（编辑器里再写）可以成功。
+  const empty = await call("preset/create", { name: "空白草稿", description: "待写" });
+  assert.equal(empty.status, 200);
+  assert.equal(empty.json.value.preset.bytes, 0);
 });

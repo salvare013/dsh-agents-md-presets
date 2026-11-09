@@ -197,3 +197,29 @@ test("工作区目录不存在时 readWorkspace 明确报错", async () => {
     await t.cleanup();
   }
 });
+
+test("应用后用编辑器外部改动：刷新时标成「<预设名>（会话内修改）」", async () => {
+  const t = await freshStore();
+  try {
+    await fs.writeFile(t.file, "# 原文\n");
+    const preset = await t.store.createPreset({ name: "外部改", content: "# 预设正文\n" });
+    await t.store.applyPreset({ workspacePath: t.workspace, presetId: preset.id });
+
+    // 模拟「编辑」在编辑器里打开工作区 AGENTS.md 后追加内容并保存。
+    await fs.writeFile(t.file, "# 预设正文\n- 编辑器里加的\n");
+    const state = await t.store.currentState(t.workspace);
+    assert.equal(state.current.source, "custom");
+    assert.equal(state.current.presetId, null);
+    assert.equal(state.current.name, "外部改（会话内修改）");
+    assert.ok(state.current.entryId);
+
+    // 改回预设原文，历史里那条 apply 又能对上，恢复成预设来源。
+    await fs.writeFile(t.file, "# 预设正文\n");
+    const back = await t.store.currentState(t.workspace);
+    assert.equal(back.current.source, "preset");
+    assert.equal(back.current.presetId, preset.id);
+    assert.equal(back.current.name, "外部改");
+  } finally {
+    await t.cleanup();
+  }
+});

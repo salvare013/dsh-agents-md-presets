@@ -159,3 +159,14 @@ test('openInEditor: 文件不存在时抛 code=file-not-found 且不 spawn', () 
   );
   assert.equal(spawnImpl.calls.length, 0);
 });
+
+test('openInEditor: requireFile=false 时允许打开尚不存在的文件（工作区还没有 AGENTS.md）', () => {
+  const file = 'C:\\ws\\AGENTS.md';
+  const env = { LOCALAPPDATA };
+  const spawnImpl = spawnRecorder();
+  const exists = (candidate) => candidate === VSCODE; // 只有 VS Code 存在，目标文件不存在
+  const result = openInEditor(file, { platform: 'win32', env, exists, spawnImpl, requireFile: false });
+
+  assert.deepEqual(result, { openedWith: 'vscode', command: VSCODE, args: ['-n', file] });
+  assert.equal(spawnImpl.calls.length, 1);
+});
