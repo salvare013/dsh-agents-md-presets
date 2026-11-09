@@ -1,0 +1,9 @@
+# 本地测试产物（隔离 dsh web 实例的 home / workspace / 浏览器 profile）
+.web-test/
+
+# 依赖与临时文件
+node_modules/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

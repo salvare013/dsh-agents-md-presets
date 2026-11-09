@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="AGENTS.md presets">
+  <defs>
+    <linearGradient id="presetBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4b6bff"/>
+      <stop offset="1" stop-color="#8a5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="58" height="58" rx="15" fill="url(#presetBg)"/>
+  <rect x="15" y="12" width="25" height="33" rx="5" fill="#ffffff" opacity="0.3"/>
+  <rect x="22" y="17" width="26" height="34" rx="5" fill="#ffffff"/>
+  <path d="M28.5 26.5h13M28.5 32.5h13M28.5 38.5h8" stroke="#5468ef" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="46" cy="45" r="8" fill="#ffffff"/>
+  <path d="M46 40.5v9M41.5 45h9" stroke="#7a55f0" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

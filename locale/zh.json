@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "AGENTS.md 预设",
+    "description": "保存多套命名的 AGENTS.md 预设，在会话里一键应用；每次写入前自动快照，可随时回滚。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "AGENTS.md Presets",
+    "description": "Keep named AGENTS.md presets and apply one from a conversation. Every write is snapshotted and can be rolled back."
+  }
+}
