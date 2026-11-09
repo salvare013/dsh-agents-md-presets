@@ -72,10 +72,12 @@ dsh plugin add D:\code\dsh-plugins\dsh-prompt-presets
 
 工作区解析顺序：显式 `workspacePath` → `sessions.get(sessionId).header.cwd` → `workingDirectory`。
 
+未注册的 `/api/*` 路径会先被宿主 API 网关拦成 `401 unauthorized`（纯文本），所以调试时看到 401 不代表路由写错了；已注册路由用错方法才是 `405`。
+
 ## 开发
 
 ```powershell
-npm test          # store / http / client 三组测试，纯 Node，无需浏览器
+npm test          # store / host / integration / client 四组测试，纯 Node，无需浏览器（当前 20 个用例）
 npm run check     # 语法检查
 ```
 
