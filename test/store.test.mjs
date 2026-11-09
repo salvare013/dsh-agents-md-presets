@@ -149,6 +149,24 @@ test("并发写入按工作区串行，两条历史都在", async () => {
   );
 });
 
+test("并发创建不再丢预设（索引读改写全局串行）", async () => {
+  const before = await store.listPresets();
+  const created = await Promise.all(
+    Array.from({ length: 12 }, (_, index) => store.createPreset({ name: `并发 ${index}`, content: `并发正文 ${index}\n` })),
+  );
+  assert.equal(new Set(created.map((item) => item.id)).size, 12);
+
+  const listed = await store.listPresets();
+  assert.equal(listed.length, before.length + 12);
+  for (const meta of created) {
+    assert.ok(listed.some((item) => item.id === meta.id), `索引里缺 ${meta.name}`);
+    assert.equal((await store.readPreset(meta.id)).content, `并发正文 ${meta.name.split(" ")[1]}\n`);
+  }
+
+  await Promise.all(created.map((meta) => store.deletePreset(meta.id)));
+  assert.equal((await store.listPresets()).length, before.length);
+});
+
 test("历史坏行被跳过，快照缺失时报错", async () => {
   const key = workspaceKeyOf(workspace);
   await fs.appendFile(path.join(root, "history", `${key}.jsonl`), "{ broken json\n");
