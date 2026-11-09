@@ -6,6 +6,10 @@
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
+  "scripts": {
+    "test": "node test/store.test.mjs && node test/host.test.mjs && node test/client.test.mjs",
+    "check": "node --check lib/store.js && node --check lib/http.js && node --check lib/index.js && node --check lib/client.js"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
