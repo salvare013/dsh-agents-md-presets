@@ -2,8 +2,9 @@
 
 给 DSH 加一套「预设 → 工作区 AGENTS.md」的管理与切换能力：
 
-- **设置 → AGENTS.md 预设**：新建、编辑、删除多个具名预设（Markdown 正文，上限 64 KiB）。
+- **设置 → AGENTS.md 预设**：新建、编辑、删除多个具名预设（Markdown 正文，上限 64 KiB）；每个预设都能「用编辑器打开」，交给本机 VS Code（没有则退回系统默认程序）改，改完点「刷新」自动对齐索引。
 - **会话输入框上方**：每个会话选一个预设并「应用」，把它写进该会话工作区的 `AGENTS.md`。
+- **点「当前：…」预览与就地编辑**：看到的是工作区里**实际生效**的 `AGENTS.md`；可以直接改、保存到工作区（只影响本工作区，全局预设不动），也能把当前内容「存为全局预设」。
 - **快照 + 历史 + 一键回滚**：每次写入前把原文存成内容寻址快照，操作记录追加到 JSONL；任何一条记录都能撤销，撤销本身也可再撤销。
 
 预设存在 DSH 数据目录（`$DSH_HOME/prompt-presets/`，默认 `~/.dsh/prompt-presets/`），跨工作区共享；只有真正「应用」时才碰工作区文件，不往仓库里塞任何东西。
@@ -69,6 +70,10 @@ dsh plugin add D:\code\dsh-plugins\dsh-prompt-presets
 | `/api/dsh-prompt-presets/preset/delete` | 删除 |
 | `/api/dsh-prompt-presets/apply` | 应用预设到工作区 |
 | `/api/dsh-prompt-presets/rollback` | 回滚某条历史记录 |
+| `/api/dsh-prompt-presets/preset/sync` | 按磁盘上的预设文件重算索引（外部编辑器改完后用） |
+| `/api/dsh-prompt-presets/preset/open` | 用本机编辑器打开预设文件（VS Code 优先，否则系统默认程序） |
+| `/api/dsh-prompt-presets/workspace/read` | 读取工作区当前生效的 `AGENTS.md` |
+| `/api/dsh-prompt-presets/workspace/write` | 直接写入工作区 `AGENTS.md`（会话内编辑；`presetId` 为空） |
 
 工作区解析顺序：显式 `workspacePath` → `sessions.get(sessionId).header.cwd` → `workingDirectory`。
 
@@ -77,7 +82,7 @@ dsh plugin add D:\code\dsh-plugins\dsh-prompt-presets
 ## 开发
 
 ```powershell
-npm test          # store / host / integration / client 四组测试，纯 Node，无需浏览器（当前 25 个用例）
+npm test          # store / workspace / editor / host / integration / client 六组测试，纯 Node，无需浏览器（当前 46 个用例）
 npm run check     # 语法检查
 ```
 
@@ -88,6 +93,7 @@ npm run check     # 语法检查
 ## 局限
 
 - 预设正文上限 64 KiB（与 `agent-instructions` 的 `maxBytes` 一致）。
+- 「用编辑器打开」优先找本机 VS Code（`%LOCALAPPDATA%\Programs\Microsoft VS Code`、Insiders、`Program Files`、PATH），找不到就退回系统默认程序；DSH 从 Electron 启动时会继承 `ELECTRON_RUN_AS_NODE=1`，插件在 spawn 前会摘掉它，否则 VS Code 会按 Node 运行并报 `bad option: -n`。
 - 「应用」直接写工作区文件，属于有意为之：这样内置加载器的 reconcile 与本地工具链都看到同一份内容。
 - 不带工作区的会话（如纯聊天草稿）无法应用，面板会给出提示。
 - 同一工作区同一时刻只可能有一个预设生效——文件只有一份；换预设就是覆盖，历史里的每条记录都能回滚。

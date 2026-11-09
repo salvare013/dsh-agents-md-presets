@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -12,6 +13,17 @@ let workspace;
 let store;
 let routes;
 let ready;
+const openedFiles = [];
+
+const fakeOpen = (file) => {
+  if (!existsSync(file)) {
+    const error = new Error(`file not found: ${file}`);
+    error.code = "file-not-found";
+    throw error;
+  }
+  openedFiles.push(file);
+  return { openedWith: "vscode" };
+};
 
 const ctx = {
   get(key) {
@@ -73,7 +85,7 @@ before(async () => {
   await fs.mkdir(workspace, { recursive: true });
   store = new PresetStore({ root, maxBytes: 4096 });
   ready = () => store.init();
-  routes = createRoutes({ ctx, store, ready });
+  routes = createRoutes({ ctx, store, ready, open: fakeOpen });
 });
 
 after(async () => {
@@ -164,4 +176,82 @@ test("错误契约：405 / 404 / 400 / 413 / 大小限制", async () => {
   const missingId = await call("apply", { sessionId: "sess-1" });
   assert.equal(missingId.status, 400);
   assert.equal(missingId.json.error.code, "id-required");
+});
+
+test("workspace/read 与 workspace/write：会话内直接改文件并留历史", async () => {
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), "# 会话前\n");
+
+  const before = await call("workspace/read", { sessionId: "sess-1" });
+  assert.equal(before.status, 200);
+  assert.equal(before.json.value.content, "# 会话前\n");
+  assert.equal(before.json.value.file.exists, true);
+
+  const written = await call("workspace/write", { sessionId: "sess-1", content: "# 会话内规则\n" });
+  assert.equal(written.status, 200);
+  assert.equal(written.json.value.unchanged, false);
+  assert.equal(written.json.value.current.source, "custom");
+  assert.equal(written.json.value.current.name, "会话内自定义");
+  assert.equal(written.json.value.history[0].presetId, null);
+  assert.equal(await readTarget(), "# 会话内规则\n");
+
+  const again = await call("workspace/write", { sessionId: "sess-1", content: "# 会话内规则\n" });
+  assert.equal(again.json.value.unchanged, true);
+
+  const entryId = written.json.value.record.id;
+  const rolled = await call("rollback", { entryId, sessionId: "sess-1" });
+  assert.equal(rolled.status, 200);
+  assert.equal(await readTarget(), "# 会话前\n");
+  assert.equal(rolled.json.value.current.source, "workspace");
+});
+
+test("workspace/write 的 label 会标注它来自哪个预设", async () => {
+  const preset = (await call("preset/create", { name: "gamma", content: "# gamma\n" })).json.value.preset;
+  await call("apply", { presetId: preset.id, sessionId: "sess-1" });
+
+  const written = await call("workspace/write", { sessionId: "sess-1", content: "# gamma 改过\n" });
+  assert.equal(written.json.value.current.source, "custom");
+  assert.equal(written.json.value.current.name, "gamma（会话内修改）");
+  assert.equal(written.json.value.current.presetId, null);
+});
+
+test("preset/sync 对齐外部编辑后的 sha1，文件缺失标 missing", async () => {
+  const preset = (await call("preset/create", { name: "sync-me", content: "# v1\n" })).json.value.preset;
+  const file = path.join(root, "presets", `${preset.id}.md`);
+  await fs.writeFile(file, "# v1 手工加长\n");
+
+  const synced = await call("preset/sync", {});
+  assert.equal(synced.status, 200);
+  const found = synced.json.value.presets.find((item) => item.id === preset.id);
+  assert.equal(found.bytes, Buffer.byteLength("# v1 手工加长\n"));
+  assert.equal(found.missing, undefined);
+
+  const read = await call("preset/read", { id: preset.id });
+  assert.equal(read.json.value.content, "# v1 手工加长\n");
+
+  await fs.rm(file);
+  const missing = await call("preset/sync", {});
+  assert.equal(missing.json.value.presets.find((item) => item.id === preset.id).missing, true);
+
+  const gone = await call("preset/read", { id: preset.id });
+  assert.equal(gone.status, 404);
+});
+
+test("preset/open 调本机编辑器；文件缺失是 404", async () => {
+  const preset = (await call("preset/create", { name: "open-me", content: "# open\n" })).json.value.preset;
+  const opened = await call("preset/open", { id: preset.id });
+  assert.equal(opened.status, 200);
+  assert.equal(opened.json.value.openedWith, "vscode");
+  assert.equal(opened.json.value.id, preset.id);
+  assert.ok(openedFiles.some((file) => file === opened.json.value.file));
+
+  await fs.rm(path.join(root, "presets", `${preset.id}.md`));
+  const missing = await call("preset/open", { id: preset.id });
+  assert.equal(missing.status, 404);
+  assert.equal(missing.json.error.code, "preset-not-found");
+});
+
+test("workspace/write 拒绝非字符串 content", async () => {
+  const result = await call("workspace/write", { sessionId: "sess-1", content: 42 });
+  assert.equal(result.status, 400);
+  assert.equal(result.json.error.code, "content-required");
 });

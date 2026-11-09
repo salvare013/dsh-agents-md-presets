@@ -1,14 +1,14 @@
 {
   "name": "@local/dsh-prompt-presets",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Named AGENTS.md presets for DSH: apply one per conversation, with snapshots and one-click rollback.",
+  "description": "Named AGENTS.md presets for DSH: apply one per conversation, edit in place, with snapshots and one-click rollback.",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "node test/store.test.mjs && node test/host.test.mjs && node test/integration.test.mjs && node test/client.test.mjs",
-    "check": "node --check lib/store.js && node --check lib/http.js && node --check lib/index.js && node --check lib/client.js"
+    "test": "node test/store.test.mjs && node test/workspace.test.mjs && node test/editor.test.mjs && node test/host.test.mjs && node test/integration.test.mjs && node test/client.test.mjs",
+    "check": "node --check lib/store.js && node --check lib/http.js && node --check lib/index.js && node --check lib/editor.js && node --check lib/client.js"
   },
   "exports": {
     ".": "./lib/index.js",
