@@ -1,0 +1,178 @@
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { after, before, test } from "node:test";
+
+import { PresetError, PresetStore, sha1Of, workspaceKeyOf } from "../lib/store.js";
+
+let root;
+let workspace;
+let store;
+
+async function readTarget() {
+  try {
+    return await fs.readFile(path.join(workspace, "AGENTS.md"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+before(async () => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-prompt-presets-"));
+  root = path.join(base, "data");
+  workspace = path.join(base, "ws");
+  await fs.mkdir(workspace, { recursive: true });
+  store = new PresetStore({ root, maxBytes: 4096 });
+  await store.init();
+});
+
+after(async () => {
+  await fs.rm(path.dirname(root), { recursive: true, force: true });
+});
+
+test("预设 CRUD 与索引持久化", async () => {
+  const created = await store.createPreset({ name: "代码审查", description: "review rules", content: "# 审查\n- 只看 diff\n" });
+  assert.equal(created.name, "代码审查");
+  assert.match(created.id, /^preset-[0-9a-f]{6}$/);
+  assert.equal(created.bytes, Buffer.byteLength("# 审查\n- 只看 diff\n", "utf8"));
+
+  const listed = await store.listPresets();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].id, created.id);
+
+  const read = await store.readPreset(created.id);
+  assert.equal(read.content, "# 审查\n- 只看 diff\n");
+
+  const updated = await store.updatePreset(created.id, { name: "代码审查 v2", content: "# 审查\n- 看完整文件\n" });
+  assert.equal(updated.name, "代码审查 v2");
+  assert.equal((await store.readPreset(created.id)).content, "# 审查\n- 看完整文件\n");
+
+  const fresh = new PresetStore({ root, maxBytes: 4096 });
+  assert.equal((await fresh.listPresets())[0].name, "代码审查 v2");
+
+  await store.deletePreset(created.id);
+  assert.deepEqual(await store.listPresets(), []);
+  await assert.rejects(store.readPreset(created.id), (error) => error.code === "preset-not-found");
+});
+
+test("应用写入文件、快照与历史；重复应用为 unchanged", async () => {
+  const preset = await store.createPreset({ name: "alpha", content: "# alpha rules\n" });
+  const original = "# 原始规则\n第二条\n";
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), original);
+
+  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id, sessionId: "s-1" });
+  assert.equal(applied.unchanged, false);
+  assert.equal(applied.current.presetId, preset.id);
+  assert.equal((await readTarget()).toString("utf8"), "# alpha rules\n");
+  assert.equal(applied.record.beforeSha1, sha1Of(Buffer.from(original, "utf8")));
+  assert.equal(applied.record.sessionId, "s-1");
+
+  const snapshot = await fs.readFile(path.join(root, "snapshots", `${applied.record.beforeSha1}.md`), "utf8");
+  assert.equal(snapshot, original);
+
+  const historyFile = path.join(root, "history", `${workspaceKeyOf(workspace)}.jsonl`);
+  const lines = (await fs.readFile(historyFile, "utf8")).trim().split("\n");
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0]).action, "apply");
+
+  const again = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
+  assert.equal(again.unchanged, true);
+  assert.equal((await fs.readFile(historyFile, "utf8")).trim().split("\n").length, 1);
+});
+
+test("回滚恢复应用前字节；回滚本身也可再回滚", async () => {
+  const original = "# 原始内容\r\n带 CRLF\r\n";
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), original);
+
+  const preset = (await store.listPresets())[0];
+  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
+  assert.equal(applied.unchanged, false);
+
+  const rolled = await store.rollback({ workspacePath: workspace, entryId: applied.record.id, sessionId: "s-2" });
+  assert.equal(rolled.unchanged, false);
+  assert.equal((await readTarget()).toString("utf8"), original);
+  assert.equal(rolled.record.revertedEntryId, applied.record.id);
+
+  const history = await store.history(workspace, 10);
+  assert.equal(history[0].action, "rollback");
+  assert.equal(history[0].beforeSha1, sha1Of(Buffer.from("# alpha rules\n", "utf8")));
+
+  // 回滚到本条 rollback 之前 → 文件又变回预设内容
+  const second = await store.rollback({ workspacePath: workspace, entryId: rolled.record.id });
+  assert.equal(second.unchanged, false);
+  assert.equal((await readTarget()).toString("utf8"), "# alpha rules\n");
+
+  const third = await store.rollback({ workspacePath: workspace, entryId: rolled.record.id });
+  assert.equal(third.unchanged, true);
+});
+
+test("原本不存在的 AGENTS.md：应用后创建，回滚后删除", async () => {
+  await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
+  const preset = (await store.listPresets())[0];
+
+  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
+  assert.equal(applied.record.beforeSha1, null);
+  assert.equal((await readTarget()) !== null, true);
+
+  const rolled = await store.rollback({ workspacePath: workspace, entryId: applied.record.id });
+  assert.equal(rolled.unchanged, false);
+  assert.equal((await readTarget()) === null, true);
+});
+
+test("超过 maxBytes 的预设被拒绝", async () => {
+  await assert.rejects(
+    store.createPreset({ name: "too big", content: "x".repeat(5000) }),
+    (error) => error instanceof PresetError && error.code === "preset-too-large",
+  );
+  await assert.rejects(store.createPreset({ name: "  " }), (error) => error.code === "name-required");
+});
+
+test("并发写入按工作区串行，两条历史都在", async () => {
+  await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
+  const a = await store.createPreset({ name: "a", content: "A\n" });
+  const b = await store.createPreset({ name: "b", content: "B\n" });
+
+  const [first, second] = await Promise.all([
+    store.applyPreset({ workspacePath: workspace, presetId: a.id }),
+    store.applyPreset({ workspacePath: workspace, presetId: b.id }),
+  ]);
+  assert.equal(first.record.presetId, a.id);
+  assert.equal(second.record.presetId, b.id);
+  assert.equal((await readTarget()).toString("utf8"), "B\n");
+
+  const history = await store.history(workspace, 10);
+  assert.deepEqual(
+    history.slice(0, 2).map((item) => item.presetId),
+    [b.id, a.id],
+  );
+});
+
+test("历史坏行被跳过，快照缺失时报错", async () => {
+  const key = workspaceKeyOf(workspace);
+  await fs.appendFile(path.join(root, "history", `${key}.jsonl`), "{ broken json\n");
+
+  const entries = await store.history(workspace, 50);
+  assert.equal(entries.every((item) => typeof item.id === "string"), true);
+
+  await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
+  const preset = await store.createPreset({ name: "c", content: "C\n" });
+  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
+  const fake = { ...applied.record, id: "h-fake", beforeSha1: "0".repeat(40) };
+  await fs.appendFile(
+    path.join(root, "history", `${key}.jsonl`),
+    `${JSON.stringify(fake)}\n`,
+  );
+  await assert.rejects(
+    store.rollback({ workspacePath: workspace, entryId: "h-fake" }),
+    (error) => error.code === "snapshot-missing",
+  );
+});
+
+test("工作区不存在时拒绝", async () => {
+  await assert.rejects(
+    store.applyPreset({ workspacePath: path.join(workspace, "missing"), presetId: "x" }),
+    (error) => error.code === "workspace-missing",
+  );
+});
