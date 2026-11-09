@@ -18,7 +18,7 @@ $DSH_HOME/prompt-presets/
 └── history/<workspaceKey>.jsonl  # 每个工作区一条追加式操作流
 ```
 
-`workspaceKey` 是工作区绝对路径（统一斜杠、小写）的 sha256 前 16 位，因此移动工作区会得到新的历史线。
+`workspaceKey` 是工作区绝对路径的 sha256 前 16 位（统一斜杠；Windows/macOS 上再折叠大小写，Linux 上保留大小写），因此移动工作区会得到新的历史线。
 
 历史记录字段：
 
@@ -77,7 +77,7 @@ dsh plugin add D:\code\dsh-plugins\dsh-prompt-presets
 ## 开发
 
 ```powershell
-npm test          # store / host / integration / client 四组测试，纯 Node，无需浏览器（当前 20 个用例）
+npm test          # store / host / integration / client 四组测试，纯 Node，无需浏览器（当前 25 个用例）
 npm run check     # 语法检查
 ```
 
@@ -90,3 +90,12 @@ npm run check     # 语法检查
 - 预设正文上限 64 KiB（与 `agent-instructions` 的 `maxBytes` 一致）。
 - 「应用」直接写工作区文件，属于有意为之：这样内置加载器的 reconcile 与本地工具链都看到同一份内容。
 - 不带工作区的会话（如纯聊天草稿）无法应用，面板会给出提示。
+- 同一工作区同一时刻只可能有一个预设生效——文件只有一份；换预设就是覆盖，历史里的每条记录都能回滚。
+- 回滚恢复的是「那一步之前的字节」，不会合并后来的编辑：如果应用后你手改过 AGENTS.md，回滚会把那些手改一并覆盖（快照仍在，可再回滚回来）。
+- 会话中途切换预设后，内置加载器会把新内容作为增量指令重新注入；但若该会话已经跑完、只是历史记录，重新进入会话才会看到新内容。
+- 本次端到端验证用的是隔离的 web 实例，没有登录模型账号，所以**没有观测到真实模型调用**；「注入后模型是否真的照做」属于 DSH 内置 `agent-instructions` 的行为，本插件只保证把文件写对。
+
+## 健壮性
+
+- 索引与历史都是「读改写」操作，进程内按工作区 / 全局两条串行队列排队，两个请求同时改不会互相覆盖。
+- 索引 JSON 损坏时会先改名成 `presets.json.corrupt-<时间戳>` 再继续；连改名都失败则直接报错停写，不会静默清空。

@@ -194,3 +194,89 @@ test("工作区不存在时拒绝", async () => {
     (error) => error.code === "workspace-missing",
   );
 });
+
+// ---------------------------------------------------------------- 隔离用例
+// 每条用例用独立数据目录，避免互相依赖执行顺序。
+
+async function freshStore({ maxBytes = 4096 } = {}) {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-preset-fresh-"));
+  const dataRoot = path.join(base, "data");
+  const ws = path.join(base, "ws");
+  await fs.mkdir(ws, { recursive: true });
+  const instance = new PresetStore({ root: dataRoot, maxBytes });
+  await instance.init();
+  return { base, dataRoot, ws, instance };
+}
+
+test("索引损坏时先备份，再从空索引继续", async () => {
+  const { base, dataRoot, instance } = await freshStore();
+  const indexFile = path.join(dataRoot, "presets.json");
+  await fs.writeFile(indexFile, "{ not json", "utf8");
+
+  assert.deepEqual(await instance.listPresets(), []);
+  const files = await fs.readdir(dataRoot);
+  assert.equal(
+    files.some((name) => name.startsWith("presets.json.corrupt-")),
+    true,
+    "损坏的索引应被改名备份",
+  );
+  assert.equal(files.includes("presets.json"), false);
+
+  // 备份之后还能正常写入。
+  await instance.createPreset({ name: "重建", content: "ok\n" });
+  assert.equal((await instance.listPresets()).length, 1);
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("history 的 limit 语义：0 为空、Infinity 为全部", async () => {
+  const { base, ws, instance } = await freshStore();
+  for (const name of ["一", "二", "三"]) {
+    const preset = await instance.createPreset({ name, content: `${name}\n` });
+    await instance.applyPreset({ workspacePath: ws, presetId: preset.id });
+  }
+  assert.deepEqual(await instance.history(ws, 0), []);
+  assert.equal((await instance.history(ws, 2)).length, 2);
+  assert.equal((await instance.history(ws, Number.POSITIVE_INFINITY)).length, 3);
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("应用时也校验 maxBytes（预设文件被手工改大后拒绝）", async () => {
+  const { base, ws, instance } = await freshStore({ maxBytes: 64 });
+  const preset = await instance.createPreset({ name: "小", content: "small\n" });
+  await fs.writeFile(path.join(base, "data", "presets", `${preset.id}.md`), "x".repeat(200), "utf8");
+  await assert.rejects(
+    instance.applyPreset({ workspacePath: ws, presetId: preset.id }),
+    (error) => error.code === "preset-too-large",
+  );
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("回滚拒绝其它工作区的历史记录", async () => {
+  const { base, ws, instance } = await freshStore();
+  const preset = await instance.createPreset({ name: "甲", content: "甲\n" });
+  await instance.applyPreset({ workspacePath: ws, presetId: preset.id });
+
+  const key = workspaceKeyOf(ws);
+  const foreign = {
+    id: "h-foreign",
+    at: new Date().toISOString(),
+    action: "apply",
+    workspaceKey: key,
+    workspacePath: path.join(base, "another-ws"),
+    presetId: null,
+    presetName: null,
+    beforeSha1: null,
+    afterSha1: null,
+    beforeBytes: 0,
+    afterBytes: 0,
+    snapshot: null,
+    sessionId: null,
+    revertedEntryId: null,
+  };
+  await fs.appendFile(path.join(base, "data", "history", `${key}.jsonl`), `${JSON.stringify(foreign)}\n`);
+  await assert.rejects(
+    instance.rollback({ workspacePath: ws, entryId: "h-foreign" }),
+    (error) => error.code === "history-workspace-mismatch",
+  );
+  await fs.rm(base, { recursive: true, force: true });
+});

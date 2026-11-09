@@ -15,6 +15,7 @@ const fakeReact = {
   useState: (initial) => [typeof initial === "function" ? initial() : initial, () => {}],
   useCallback: (fn) => fn,
   useMemo: (factory) => factory(),
+  useRef: (initial) => ({ current: initial }),
   useEffect: () => {},
 };
 
