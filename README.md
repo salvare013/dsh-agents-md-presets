@@ -48,19 +48,27 @@ $DSH_HOME/prompt-presets/
 
 ## 安装
 
-插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）：
+插件已发布在 GitHub：`salvare013/dsh-prompt-presets`（公开仓库，`v0.x.x` tag 对应每个版本）。插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）。
 
 ```powershell
-# 桌面端 profile（例）
-dsh plugin --profile desktop add D:\code\dsh-plugins\dsh-prompt-presets
+# 从 GitHub 安装最新 main（推荐；pnpm 会把依赖记成 github:salvare013/dsh-prompt-presets）
+dsh plugin --profile <name> add https://github.com/salvare013/dsh-prompt-presets.git
 
-# 自己新建的 profile 没有 web 载体时，先从内置 web 配置派生一份再装：
+# 或锁到某个版本（tag 名即版本）
+dsh plugin --profile <name> add "github:salvare013/dsh-prompt-presets#v0.6.0"
+```
+
+自己新建的 profile 没有 web 载体时，先从内置 web 配置派生一份再装：
+
+```powershell
 dsh --profile myweb --from-default-profile web --dump-config
-dsh plugin --profile myweb add D:\code\dsh-plugins\dsh-prompt-presets
+dsh plugin --profile myweb add "github:salvare013/dsh-prompt-presets#v0.6.0"
 dsh --profile myweb --port 39123 --no-open
 ```
 
-用 `pnpm`/`link:` 协议安装本地目录时，pnpm 会打印 `peerDependencies` 警告（我们的 peer 依赖全部 optional），不影响安装与运行。装好后重启 DSH，打开「设置 → AGENTS.md 预设」。
+本地开发仍可用目录安装（改 `lib/` 即时生效）：`dsh plugin --profile <name> add D:\code\dsh-plugins\dsh-prompt-presets`。
+
+用 `pnpm` 安装本地目录（`link:` 协议）时会打印 `peerDependencies` 警告（我们的 peer 依赖全部 optional），不影响安装与运行。装好后重启 DSH，打开「设置 → AGENTS.md 预设」。
 
 ## HTTP 接口（Host 半边）
 
