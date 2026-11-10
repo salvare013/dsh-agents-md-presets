@@ -19,6 +19,16 @@ async function readTarget() {
   }
 }
 
+async function readState() {
+  const file = path.join(root, "state", `${workspaceKeyOf(workspace)}.json`);
+  try {
+    return JSON.parse(await fs.readFile(file, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 before(async () => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-prompt-presets-"));
   root = path.join(base, "data");
@@ -57,68 +67,72 @@ test("预设 CRUD 与索引持久化", async () => {
   await assert.rejects(store.readPreset(created.id), (error) => error.code === "preset-not-found");
 });
 
-test("应用写入文件、快照与历史；重复应用为 unchanged", async () => {
+test("应用写入文件并记录最后预设；覆盖前保留一份备份；重复应用 unchanged", async () => {
   const preset = await store.createPreset({ name: "alpha", content: "# alpha rules\n" });
   const original = "# 原始规则\n第二条\n";
   await fs.writeFile(path.join(workspace, "AGENTS.md"), original);
 
-  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id, sessionId: "s-1" });
+  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
   assert.equal(applied.unchanged, false);
   assert.equal(applied.current.presetId, preset.id);
+  assert.equal(applied.current.source, "preset");
   assert.equal((await readTarget()).toString("utf8"), "# alpha rules\n");
-  assert.equal(applied.record.beforeSha1, sha1Of(Buffer.from(original, "utf8")));
-  assert.equal(applied.record.sessionId, "s-1");
 
-  const snapshot = await fs.readFile(path.join(root, "snapshots", `${applied.record.beforeSha1}.md`), "utf8");
-  assert.equal(snapshot, original);
+  // 状态文件只记「最后应用了哪个预设」，没有历史列表。
+  const state = await readState();
+  assert.equal(state.presetId, preset.id);
+  assert.equal(state.sha1, preset.sha1);
 
-  const historyFile = path.join(root, "history", `${workspaceKeyOf(workspace)}.jsonl`);
-  const lines = (await fs.readFile(historyFile, "utf8")).trim().split("\n");
-  assert.equal(lines.length, 1);
-  assert.equal(JSON.parse(lines[0]).action, "apply");
+  // 原文件在被覆盖前留了最近一份备份。
+  const backup = await fs.readFile(path.join(root, "backup", `${workspaceKeyOf(workspace)}.md`), "utf8");
+  assert.equal(backup, original);
 
   const again = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
   assert.equal(again.unchanged, true);
-  assert.equal((await fs.readFile(historyFile, "utf8")).trim().split("\n").length, 1);
+  assert.equal((await readTarget()).toString("utf8"), "# alpha rules\n");
 });
 
-test("回滚恢复应用前字节；回滚本身也可再回滚", async () => {
-  const original = "# 原始内容\r\n带 CRLF\r\n";
-  await fs.writeFile(path.join(workspace, "AGENTS.md"), original);
-
-  const preset = (await store.listPresets())[0];
-  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
+test("换一个预设时备份的是上一个预设写入的内容", async () => {
+  const next = await store.createPreset({ name: "beta", content: "# beta rules\n" });
+  const applied = await store.applyPreset({ workspacePath: workspace, presetId: next.id });
   assert.equal(applied.unchanged, false);
 
-  const rolled = await store.rollback({ workspacePath: workspace, entryId: applied.record.id, sessionId: "s-2" });
-  assert.equal(rolled.unchanged, false);
-  assert.equal((await readTarget()).toString("utf8"), original);
-  assert.equal(rolled.record.revertedEntryId, applied.record.id);
-
-  const history = await store.history(workspace, 10);
-  assert.equal(history[0].action, "rollback");
-  assert.equal(history[0].beforeSha1, sha1Of(Buffer.from("# alpha rules\n", "utf8")));
-
-  // 回滚到本条 rollback 之前 → 文件又变回预设内容
-  const second = await store.rollback({ workspacePath: workspace, entryId: rolled.record.id });
-  assert.equal(second.unchanged, false);
-  assert.equal((await readTarget()).toString("utf8"), "# alpha rules\n");
-
-  const third = await store.rollback({ workspacePath: workspace, entryId: rolled.record.id });
-  assert.equal(third.unchanged, true);
+  const backup = await fs.readFile(path.join(root, "backup", `${workspaceKeyOf(workspace)}.md`), "utf8");
+  assert.equal(backup, "# alpha rules\n");
+  assert.equal((await readState()).presetId, next.id);
 });
 
-test("原本不存在的 AGENTS.md：应用后创建，回滚后删除", async () => {
-  await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
-  const preset = (await store.listPresets())[0];
+test("外部改动后 current 标成「（会话内修改）」，改回预设内容又认作预设", async () => {
+  const preset = (await store.listPresets()).find((item) => item.name === "beta");
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), "# beta rules\n- 手工补一条\n");
 
-  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
-  assert.equal(applied.record.beforeSha1, null);
-  assert.equal((await readTarget()) !== null, true);
+  const custom = await store.currentState(workspace);
+  assert.equal(custom.current.source, "custom");
+  assert.equal(custom.current.presetId, null);
+  assert.equal(custom.current.name, "beta（会话内修改）");
+  assert.notEqual(custom.current.sha1, preset.sha1);
 
-  const rolled = await store.rollback({ workspacePath: workspace, entryId: applied.record.id });
-  assert.equal(rolled.unchanged, false);
-  assert.equal((await readTarget()) === null, true);
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), "# beta rules\n");
+  const back = await store.currentState(workspace);
+  assert.equal(back.current.source, "preset");
+  assert.equal(back.current.presetId, preset.id);
+});
+
+test("原本不存在的 AGENTS.md：应用后创建，不产生备份", async () => {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-preset-empty-"));
+  const ws = path.join(base, "ws");
+  await fs.mkdir(ws, { recursive: true });
+  const instance = new PresetStore({ root: path.join(base, "data") });
+  await instance.init();
+  const preset = await instance.createPreset({ name: "新建", content: "# created\n" });
+
+  const applied = await instance.applyPreset({ workspacePath: ws, presetId: preset.id });
+  assert.equal(applied.unchanged, false);
+  assert.equal(applied.current.exists, true);
+  assert.equal(await fs.readFile(path.join(ws, "AGENTS.md"), "utf8"), "# created\n");
+  assert.deepEqual(await fs.readdir(path.join(base, "data", "backup")), []);
+
+  await fs.rm(base, { recursive: true, force: true });
 });
 
 test("超过 maxBytes 的预设被拒绝", async () => {
@@ -129,7 +143,7 @@ test("超过 maxBytes 的预设被拒绝", async () => {
   await assert.rejects(store.createPreset({ name: "  " }), (error) => error.code === "name-required");
 });
 
-test("并发写入按工作区串行，两条历史都在", async () => {
+test("并发写入按工作区串行，最终是后一次的内容", async () => {
   await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
   const a = await store.createPreset({ name: "a", content: "A\n" });
   const b = await store.createPreset({ name: "b", content: "B\n" });
@@ -138,15 +152,10 @@ test("并发写入按工作区串行，两条历史都在", async () => {
     store.applyPreset({ workspacePath: workspace, presetId: a.id }),
     store.applyPreset({ workspacePath: workspace, presetId: b.id }),
   ]);
-  assert.equal(first.record.presetId, a.id);
-  assert.equal(second.record.presetId, b.id);
+  assert.equal(first.preset.id, a.id);
+  assert.equal(second.preset.id, b.id);
   assert.equal((await readTarget()).toString("utf8"), "B\n");
-
-  const history = await store.history(workspace, 10);
-  assert.deepEqual(
-    history.slice(0, 2).map((item) => item.presetId),
-    [b.id, a.id],
-  );
+  assert.equal((await readState()).presetId, b.id);
 });
 
 test("并发创建不再丢预设（索引读改写全局串行）", async () => {
@@ -165,27 +174,6 @@ test("并发创建不再丢预设（索引读改写全局串行）", async () =>
 
   await Promise.all(created.map((meta) => store.deletePreset(meta.id)));
   assert.equal((await store.listPresets()).length, before.length);
-});
-
-test("历史坏行被跳过，快照缺失时报错", async () => {
-  const key = workspaceKeyOf(workspace);
-  await fs.appendFile(path.join(root, "history", `${key}.jsonl`), "{ broken json\n");
-
-  const entries = await store.history(workspace, 50);
-  assert.equal(entries.every((item) => typeof item.id === "string"), true);
-
-  await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
-  const preset = await store.createPreset({ name: "c", content: "C\n" });
-  const applied = await store.applyPreset({ workspacePath: workspace, presetId: preset.id });
-  const fake = { ...applied.record, id: "h-fake", beforeSha1: "0".repeat(40) };
-  await fs.appendFile(
-    path.join(root, "history", `${key}.jsonl`),
-    `${JSON.stringify(fake)}\n`,
-  );
-  await assert.rejects(
-    store.rollback({ workspacePath: workspace, entryId: "h-fake" }),
-    (error) => error.code === "snapshot-missing",
-  );
 });
 
 test("工作区不存在时拒绝", async () => {
@@ -228,18 +216,6 @@ test("索引损坏时先备份，再从空索引继续", async () => {
   await fs.rm(base, { recursive: true, force: true });
 });
 
-test("history 的 limit 语义：0 为空、Infinity 为全部", async () => {
-  const { base, ws, instance } = await freshStore();
-  for (const name of ["一", "二", "三"]) {
-    const preset = await instance.createPreset({ name, content: `${name}\n` });
-    await instance.applyPreset({ workspacePath: ws, presetId: preset.id });
-  }
-  assert.deepEqual(await instance.history(ws, 0), []);
-  assert.equal((await instance.history(ws, 2)).length, 2);
-  assert.equal((await instance.history(ws, Number.POSITIVE_INFINITY)).length, 3);
-  await fs.rm(base, { recursive: true, force: true });
-});
-
 test("应用时也校验 maxBytes（预设文件被手工改大后拒绝）", async () => {
   const { base, ws, instance } = await freshStore({ maxBytes: 64 });
   const preset = await instance.createPreset({ name: "小", content: "small\n" });
@@ -247,36 +223,6 @@ test("应用时也校验 maxBytes（预设文件被手工改大后拒绝）", as
   await assert.rejects(
     instance.applyPreset({ workspacePath: ws, presetId: preset.id }),
     (error) => error.code === "preset-too-large",
-  );
-  await fs.rm(base, { recursive: true, force: true });
-});
-
-test("回滚拒绝其它工作区的历史记录", async () => {
-  const { base, ws, instance } = await freshStore();
-  const preset = await instance.createPreset({ name: "甲", content: "甲\n" });
-  await instance.applyPreset({ workspacePath: ws, presetId: preset.id });
-
-  const key = workspaceKeyOf(ws);
-  const foreign = {
-    id: "h-foreign",
-    at: new Date().toISOString(),
-    action: "apply",
-    workspaceKey: key,
-    workspacePath: path.join(base, "another-ws"),
-    presetId: null,
-    presetName: null,
-    beforeSha1: null,
-    afterSha1: null,
-    beforeBytes: 0,
-    afterBytes: 0,
-    snapshot: null,
-    sessionId: null,
-    revertedEntryId: null,
-  };
-  await fs.appendFile(path.join(base, "data", "history", `${key}.jsonl`), `${JSON.stringify(foreign)}\n`);
-  await assert.rejects(
-    instance.rollback({ workspacePath: ws, entryId: "h-foreign" }),
-    (error) => error.code === "history-workspace-mismatch",
   );
   await fs.rm(base, { recursive: true, force: true });
 });
@@ -304,5 +250,15 @@ test("新建预设可以先不写正文，等编辑器来填", async () => {
   const draft = await instance.createPreset({ name: "草稿", description: "刚建好" });
   assert.equal(draft.bytes, 0);
   assert.equal((await instance.readPreset(draft.id)).content, "");
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("currentState 在文件不存在时给出 exists=false、source=workspace", async () => {
+  const { base, ws, instance } = await freshStore();
+  const state = await instance.currentState(ws);
+  assert.equal(state.current.exists, false);
+  assert.equal(state.current.sha1, null);
+  assert.equal(state.current.bytes, 0);
+  assert.equal(state.current.source, "workspace");
   await fs.rm(base, { recursive: true, force: true });
 });

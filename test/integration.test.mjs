@@ -10,7 +10,7 @@ import { PresetStore } from "../lib/store.js";
 
 /**
  * 真实 HTTP 集成测试：node:http 监听 127.0.0.1:0，按 pathname 分发 createRoutes 的路由，
- * handler 统一走 makeHandler，用全局 fetch 验证响应头、包络、CRUD、apply/rollback 与错误契约。
+ * handler 统一走 makeHandler，用全局 fetch 验证响应头、包络、CRUD、apply 与错误契约。
  */
 
 const SESSION_ID = "sess-integration";
@@ -150,7 +150,7 @@ test("state：无工作区时返回预设清单，响应头与成功包络符合
   assert.deepEqual(result.json.value.presets, [], "初始预设列表应为空");
   assert.equal(result.json.value.workspace, null, "没有 workspacePath/sessionId 时 workspace 应为 null");
   assert.equal(result.json.value.current, null, "没有工作区时 current 应为 null");
-  assert.deepEqual(result.json.value.history, [], "没有工作区时 history 应为空数组");
+  assert.equal(Object.hasOwn(result.json.value, "history"), false, "state 不再返回历史");
   assert.equal(result.json.value.limits.maxBytes, 4096, "limits.maxBytes 应与构造参数一致");
 });
 
@@ -189,8 +189,6 @@ test("preset/create → read → update → delete 走完整 CRUD", async () => 
   assertErrorEnvelope(missing, "删除后读取", 404, "preset-not-found");
 });
 
-let flow;
-
 test("preset/create → state（workspacePath）→ apply（sessionId）定位工作区；重复 apply 为 unchanged", async () => {
   const created = await call("preset/create", { name: "工作流预设", content: "# 预设内容\n" });
   assertSuccessEnvelope(created, "preset/create（工作流）");
@@ -207,42 +205,14 @@ test("preset/create → state（workspacePath）→ apply（sessionId）定位�
   assertSuccessEnvelope(applied, "apply");
   assert.equal(applied.json.value.unchanged, false, "首次应用应写入文件");
   assert.equal(applied.json.value.current.presetId, presetId, "应用后 current.presetId 应为该预设");
-  assert.equal(applied.json.value.record.sessionId, SESSION_ID, "历史记录应带上 sessionId");
-  assert.equal(applied.json.value.history.length, 1, "首次应用后历史应有一条记录");
+  assert.equal(applied.json.value.current.source, "preset", "应用后来源应为预设");
+  assert.equal(Object.hasOwn(applied.json.value, "record"), false, "apply 不再返回历史记录");
   assert.equal(await readTarget(), "# 预设内容\n", "应用后文件应为预设内容");
-
-  flow = { presetId, applyRecordId: applied.json.value.record.id };
 
   const again = await call("apply", { presetId, sessionId: SESSION_ID });
   assertSuccessEnvelope(again, "apply（重复）");
   assert.equal(again.json.value.unchanged, true, "内容一致时 apply 应为 unchanged");
-  assert.equal(again.json.value.record, null, "unchanged 时不应产生历史记录");
-  assert.equal(again.json.value.history.length, 1, "重复 apply 不应新增历史");
-});
-
-test("rollback 恢复原文，再回滚那条 rollback 记录可回到预设内容", async () => {
-  assert.ok(flow?.applyRecordId, "前置 apply 测试应已写入 apply 记录");
-
-  const rolled = await call("rollback", { entryId: flow.applyRecordId, sessionId: SESSION_ID });
-  assertSuccessEnvelope(rolled, "rollback");
-  assert.equal(rolled.json.value.unchanged, false, "首次回滚应改写文件");
-  assert.equal(rolled.json.value.record.action, "rollback", "回滚记录 action 应为 rollback");
-  assert.equal(rolled.json.value.record.revertedEntryId, flow.applyRecordId, "回滚记录应指向被撤销的 apply 记录");
-  assert.equal(rolled.json.value.record.sessionId, SESSION_ID, "回滚记录应带上 sessionId");
-  assert.equal(rolled.json.value.history[0].action, "rollback", "历史首条应为 rollback");
-  assert.equal(await readTarget(), ORIGINAL, "回滚后文件应恢复原文");
-
-  flow.rollbackRecordId = rolled.json.value.record.id;
-
-  const second = await call("rollback", { entryId: flow.rollbackRecordId, sessionId: SESSION_ID });
-  assertSuccessEnvelope(second, "rollback（回滚 rollback）");
-  assert.equal(second.json.value.unchanged, false, "回滚 rollback 记录应改写文件");
-  assert.equal(second.json.value.record.revertedEntryId, flow.rollbackRecordId, "新记录应指向被撤销的 rollback 记录");
-  assert.equal(await readTarget(), "# 预设内容\n", "回滚 rollback 记录后应回到预设内容");
-
-  const third = await call("rollback", { entryId: flow.rollbackRecordId, sessionId: SESSION_ID });
-  assertSuccessEnvelope(third, "rollback（重复）");
-  assert.equal(third.json.value.unchanged, true, "同一回滚记录再次执行应为 unchanged");
+  assert.equal(await readTarget(), "# 预设内容\n", "重复应用后文件仍是预设内容");
 });
 
 test("错误契约：GET 打 POST 路由 405、读不存在 404、坏 JSON 400、超大请求体 413", async () => {

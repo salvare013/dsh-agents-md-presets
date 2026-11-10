@@ -36,102 +36,19 @@ async function readFileOrNull(file) {
   }
 }
 
-test("writeWorkspace 直接写文件、记历史，来源标成会话内自定义", async () => {
+test("readWorkspace 返回工作区实际文件；文件不存在时是空内容", async () => {
   const t = await freshStore();
   try {
+    const empty = await t.store.readWorkspace(t.workspace);
+    assert.equal(empty.file.exists, false);
+    assert.equal(empty.file.sha1, null);
+    assert.equal(empty.content, "");
+
     await fs.writeFile(t.file, "# 原文\n");
-
-    const result = await t.store.writeWorkspace({
-      workspacePath: t.workspace,
-      content: "# 会话内改的\n",
-      sessionId: "sess-1",
-    });
-    assert.equal(result.unchanged, false);
-    assert.equal(result.current.exists, true);
-    assert.equal(result.current.source, "custom");
-    assert.equal(result.current.name, "会话内自定义");
-    assert.equal(result.current.presetId, null);
-    assert.equal(result.current.bytes, Buffer.byteLength("# 会话内改的\n"));
-    assert.equal(await readFileOrNull(t.file), "# 会话内改的\n");
-
-    assert.equal(result.record.action, "apply");
-    assert.equal(result.record.presetId, null);
-    assert.equal(result.record.sessionId, "sess-1");
-    const entries = await t.store.history(t.workspace, Infinity);
-    assert.equal(entries.length, 1);
-    assert.equal(entries[0].afterSha1, sha1Of(Buffer.from("# 会话内改的\n")));
-
-    const again = await t.store.writeWorkspace({ workspacePath: t.workspace, content: "# 会话内改的\n" });
-    assert.equal(again.unchanged, true);
-    assert.equal(again.record, null);
-  } finally {
-    await t.cleanup();
-  }
-});
-
-test("先应用预设再会话内修改：label 继承预设名，回滚回到预设内容", async () => {
-  const t = await freshStore();
-  try {
-    const preset = await t.store.createPreset({ name: "代码审查", content: "# 审查\n" });
-    await t.store.applyPreset({ workspacePath: t.workspace, presetId: preset.id, sessionId: "sess-1" });
-
-    const edited = await t.store.writeWorkspace({
-      workspacePath: t.workspace,
-      content: "# 审查（我改了这条）\n",
-      sessionId: "sess-1",
-    });
-    assert.equal(edited.current.source, "custom");
-    assert.equal(edited.current.name, "代码审查（会话内修改）");
-    assert.equal(edited.current.presetId, null);
-
-    const applied = await t.store.currentState(t.workspace);
-    assert.equal(applied.current.source, "custom");
-
-    const back = await t.store.rollback({
-      workspacePath: t.workspace,
-      entryId: edited.record.id,
-      sessionId: "sess-1",
-    });
-    assert.equal(await readFileOrNull(t.file), "# 审查\n");
-    assert.equal(back.current.source, "preset");
-    assert.equal(back.current.presetId, preset.id);
-  } finally {
-    await t.cleanup();
-  }
-});
-
-test("工作区原本没有 AGENTS.md：写入可回滚，回滚后文件被删除", async () => {
-  const t = await freshStore();
-  try {
     const read = await t.store.readWorkspace(t.workspace);
-    assert.equal(read.file.exists, false);
-    assert.equal(read.content, "");
-
-    const written = await t.store.writeWorkspace({
-      workspacePath: t.workspace,
-      content: "# 新建\n",
-    });
-    assert.equal(written.current.exists, true);
-    assert.equal(written.record.beforeSha1, null);
-    assert.equal(written.record.snapshot, null);
-
-    const rolled = await t.store.rollback({ workspacePath: t.workspace, entryId: written.record.id });
-    assert.equal(await readFileOrNull(t.file), null);
-    assert.equal(rolled.current.exists, false);
-    assert.equal(rolled.current.source, "workspace");
-  } finally {
-    await t.cleanup();
-  }
-});
-
-test("writeWorkspace 同样受 maxBytes 限制", async () => {
-  const t = await freshStore({ maxBytes: 24 });
-  try {
-    await assert.rejects(
-      t.store.writeWorkspace({ workspacePath: t.workspace, content: "x".repeat(64) }),
-      (error) => error.code === "preset-too-large",
-    );
-    assert.equal(await readFileOrNull(t.file), null);
+    assert.equal(read.file.exists, true);
+    assert.equal(read.file.sha1, sha1Of(Buffer.from("# 原文\n")));
+    assert.equal(read.content, "# 原文\n");
   } finally {
     await t.cleanup();
   }
@@ -165,7 +82,7 @@ test("syncPresets 对齐外部编辑、标记缺失、恢复后清除 missing", 
   }
 });
 
-test("没有历史时按内容认预设（手工把预设内容拷进工作区）", async () => {
+test("没有应用记录时按内容认预设（手工把预设内容拷进工作区）", async () => {
   const t = await freshStore();
   try {
     const preset = await t.store.createPreset({ name: "拷进来的", content: "# 拷进来的全文\n" });
@@ -176,9 +93,9 @@ test("没有历史时按内容认预设（手工把预设内容拷进工作区�
     assert.equal(state.current.source, "preset");
     assert.equal(state.current.presetId, preset.id);
     assert.equal(state.current.name, "拷进来的");
-    assert.equal(state.current.entryId, null);
+    assert.equal(state.current.description, "");
 
-    // 内容与任何预设都不同 → 用户自己的原文。
+    // 内容与任何预设都不同，且没有应用记录 → 用户自己的原文。
     await fs.writeFile(t.file, "# 用户自己写的\n");
     const own = await t.store.currentState(t.workspace);
     assert.equal(own.current.source, "workspace");
@@ -202,7 +119,7 @@ test("应用后用编辑器外部改动：刷新时标成「<预设名>（会话
   const t = await freshStore();
   try {
     await fs.writeFile(t.file, "# 原文\n");
-    const preset = await t.store.createPreset({ name: "外部改", content: "# 预设正文\n" });
+    const preset = await t.store.createPreset({ name: "外部改", content: "# 预设正文\n", description: "说明文字" });
     await t.store.applyPreset({ workspacePath: t.workspace, presetId: preset.id });
 
     // 模拟「编辑」在编辑器里打开工作区 AGENTS.md 后追加内容并保存。
@@ -211,14 +128,28 @@ test("应用后用编辑器外部改动：刷新时标成「<预设名>（会话
     assert.equal(state.current.source, "custom");
     assert.equal(state.current.presetId, null);
     assert.equal(state.current.name, "外部改（会话内修改）");
-    assert.ok(state.current.entryId);
+    assert.equal(state.current.description, "说明文字");
 
-    // 改回预设原文，历史里那条 apply 又能对上，恢复成预设来源。
+    // 改回预设原文，内容 sha1 又能对上预设。
     await fs.writeFile(t.file, "# 预设正文\n");
     const back = await t.store.currentState(t.workspace);
     assert.equal(back.current.source, "preset");
     assert.equal(back.current.presetId, preset.id);
     assert.equal(back.current.name, "外部改");
+  } finally {
+    await t.cleanup();
+  }
+});
+
+test("应用预设会创建不存在的 AGENTS.md，并记录状态", async () => {
+  const t = await freshStore();
+  try {
+    const preset = await t.store.createPreset({ name: "生成", content: "# 生成的文件\n" });
+    const applied = await t.store.applyPreset({ workspacePath: t.workspace, presetId: preset.id });
+    assert.equal(applied.unchanged, false);
+    assert.equal(applied.current.exists, true);
+    assert.equal(await readFileOrNull(t.file), "# 生成的文件\n");
+    assert.equal(applied.current.source, "preset");
   } finally {
     await t.cleanup();
   }

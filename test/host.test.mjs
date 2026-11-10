@@ -131,25 +131,22 @@ test("apply 用 sessionId 定位工作区，重复应用为 unchanged", async ()
   assert.equal(applied.status, 200);
   assert.equal(applied.json.value.unchanged, false);
   assert.equal(applied.json.value.current.presetId, presetId);
-  assert.equal(applied.json.value.history.length, 1);
+  assert.equal(applied.json.value.current.source, "preset");
   assert.equal(await readTarget(), "# alpha\n");
 
   const again = await call("apply", { presetId, sessionId: "sess-1" });
   assert.equal(again.json.value.unchanged, true);
-  assert.equal(again.json.value.history.length, 1);
+  assert.equal(await readTarget(), "# alpha\n");
 });
 
-test("rollback 恢复原文件并可重复回滚", async () => {
-  await fs.writeFile(path.join(workspace, "AGENTS.md"), "# 原来的规则\n");
-  const preset = (await call("preset/create", { name: "beta", content: "# beta\n" })).json.value.preset;
-
-  const applied = await call("apply", { presetId: preset.id, sessionId: "sess-1" });
-  const entryId = applied.json.value.record.id;
-
-  const rolled = await call("rollback", { entryId, sessionId: "sess-1" });
-  assert.equal(rolled.status, 200);
-  assert.equal(await readTarget(), "# 原来的规则\n");
-  assert.equal(rolled.json.value.history[0].action, "rollback");
+test("state 带工作区时返回 current（没有文件时 exists=false）", async () => {
+  await fs.rm(path.join(workspace, "AGENTS.md"), { force: true });
+  const { json } = await call("state", { sessionId: "sess-1" });
+  assert.equal(json.ok, true);
+  assert.equal(json.value.workspace.key.length, 16);
+  assert.equal(json.value.current.exists, false);
+  assert.equal(json.value.current.source, "workspace");
+  assert.equal(json.value.history, undefined);
 });
 
 test("错误契约：405 / 404 / 400 / 413 / 大小限制", async () => {
@@ -178,7 +175,7 @@ test("错误契约：405 / 404 / 400 / 413 / 大小限制", async () => {
   assert.equal(missingId.json.error.code, "id-required");
 });
 
-test("workspace/read 与 workspace/write：会话内直接改文件并留历史", async () => {
+test("workspace/read 读取工作区实际文件", async () => {
   await fs.writeFile(path.join(workspace, "AGENTS.md"), "# 会话前\n");
 
   const before = await call("workspace/read", { sessionId: "sess-1" });
@@ -186,32 +183,11 @@ test("workspace/read 与 workspace/write：会话内直接改文件并留历史"
   assert.equal(before.json.value.content, "# 会话前\n");
   assert.equal(before.json.value.file.exists, true);
 
-  const written = await call("workspace/write", { sessionId: "sess-1", content: "# 会话内规则\n" });
-  assert.equal(written.status, 200);
-  assert.equal(written.json.value.unchanged, false);
-  assert.equal(written.json.value.current.source, "custom");
-  assert.equal(written.json.value.current.name, "会话内自定义");
-  assert.equal(written.json.value.history[0].presetId, null);
-  assert.equal(await readTarget(), "# 会话内规则\n");
-
-  const again = await call("workspace/write", { sessionId: "sess-1", content: "# 会话内规则\n" });
-  assert.equal(again.json.value.unchanged, true);
-
-  const entryId = written.json.value.record.id;
-  const rolled = await call("rollback", { entryId, sessionId: "sess-1" });
-  assert.equal(rolled.status, 200);
-  assert.equal(await readTarget(), "# 会话前\n");
-  assert.equal(rolled.json.value.current.source, "workspace");
-});
-
-test("workspace/write 的 label 会标注它来自哪个预设", async () => {
-  const preset = (await call("preset/create", { name: "gamma", content: "# gamma\n" })).json.value.preset;
-  await call("apply", { presetId: preset.id, sessionId: "sess-1" });
-
-  const written = await call("workspace/write", { sessionId: "sess-1", content: "# gamma 改过\n" });
-  assert.equal(written.json.value.current.source, "custom");
-  assert.equal(written.json.value.current.name, "gamma（会话内修改）");
-  assert.equal(written.json.value.current.presetId, null);
+  await fs.rm(path.join(workspace, "AGENTS.md"));
+  const missing = await call("workspace/read", { sessionId: "sess-1" });
+  assert.equal(missing.status, 200);
+  assert.equal(missing.json.value.file.exists, false);
+  assert.equal(missing.json.value.content, "");
 });
 
 test("preset/sync 对齐外部编辑后的 sha1，文件缺失标 missing", async () => {
@@ -248,12 +224,6 @@ test("preset/open 调本机编辑器；文件缺失是 404", async () => {
   const missing = await call("preset/open", { id: preset.id });
   assert.equal(missing.status, 404);
   assert.equal(missing.json.error.code, "preset-not-found");
-});
-
-test("workspace/write 拒绝非字符串 content", async () => {
-  const result = await call("workspace/write", { sessionId: "sess-1", content: 42 });
-  assert.equal(result.status, 400);
-  assert.equal(result.json.error.code, "content-required");
 });
 
 test("workspace/open 用编辑器打开工作区 AGENTS.md（文件不存在也能先打开）", async () => {

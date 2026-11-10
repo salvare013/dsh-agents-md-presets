@@ -52,8 +52,7 @@ test("client 模块加载并导出 apply / inject", () => {
   assert.deepEqual([...exported.inject], ["slots"]);
 });
 
-test("apply() 注册设置页与会话预设条", () => {
-  const exported = boot();
+test("apply() 注册设置页与会话预设条", () => {  const exported = boot();
   const registrations = [];
   const ctx = {
     slots: {
@@ -80,4 +79,11 @@ test("apply() 注册设置页与会话预设条", () => {
   assert.equal(settings.options.label(), "AGENTS.md 预设");
   assert.equal(typeof settings.component, "function");
   assert.equal(typeof dock.component, "function");
+});
+
+test("会话面板不再包含历史与回滚入口", () => {
+  assert.equal(source.includes('api("rollback"'), false);
+  assert.equal(source.includes("entryRollback"), false);
+  assert.equal(source.includes("showHistory"), false);
+  assert.equal(source.includes("snapshotHint"), false);
 });

@@ -66,17 +66,17 @@ test('找不到 VS Code 时返回 null，且 env 缺字段 / 空 PATH 不抛异�
   assert.equal(findCodeExecutable({ platform: 'linux', env: { PATH: '/usr/bin' }, exists: () => false }), null);
 });
 
-test('openInEditor: .exe 直接 spawn，带 -n 与 detached 选项，并调用 unref', () => {
+test('openInEditor: .exe 直接 spawn，复用窗口（-r -g file:1）并调用 unref', () => {
   const file = 'C:\\ws\\AGENTS.md';
   const env = { LOCALAPPDATA };
   const exists = (candidate) => candidate === file || candidate === VSCODE;
   const spawnImpl = spawnRecorder();
   const result = openInEditor(file, { platform: 'win32', env, exists, spawnImpl });
 
-  assert.deepEqual(result, { openedWith: 'vscode', command: VSCODE, args: ['-n', file] });
+  assert.deepEqual(result, { openedWith: 'vscode', command: VSCODE, args: ['-r', '-g', `${file}:1`] });
   assert.equal(spawnImpl.calls.length, 1);
   assert.equal(spawnImpl.calls[0].command, VSCODE);
-  assert.deepEqual(spawnImpl.calls[0].args, ['-n', file]);
+  assert.deepEqual(spawnImpl.calls[0].args, ['-r', '-g', `${file}:1`]);
   assert.deepEqual(spawnImpl.calls[0].options, { ...OPTIONS, env });
   assert.equal(spawnImpl.unrefCount(), 1);
 
@@ -86,7 +86,7 @@ test('openInEditor: .exe 直接 spawn，带 -n 与 detached 选项，并调用 u
   );
 });
 
-test('openInEditor: .cmd 走 ComSpec /d /s /c，命令中带 -n 和引号', () => {
+test('openInEditor: .cmd 走 ComSpec /d /s /c，命令中带 -r -g 和引号', () => {
   const bin = 'C:\\Program Files\\Microsoft VS Code\\bin';
   const codeCmd = `${bin}\\code.cmd`;
   const file = 'D:\\notes\\带空格 的笔记.md';
@@ -98,8 +98,8 @@ test('openInEditor: .cmd 走 ComSpec /d /s /c，命令中带 -n 和引号', () =
   assert.equal(result.openedWith, 'vscode');
   assert.equal(result.command, 'C:\\Windows\\System32\\cmd.exe');
   assert.deepEqual(result.args.slice(0, 3), ['/d', '/s', '/c']);
-  assert.equal(result.args[3], `"${codeCmd}" -n "${file}"`);
-  assert.match(result.args[3], / -n "D:\\notes\\带空格 的笔记\.md"$/);
+  assert.equal(result.args[3], `"${codeCmd}" -r -g "${file}:1"`);
+  assert.match(result.args[3], / -r -g "D:\\notes\\带空格 的笔记\.md:1"$/);
   assert.deepEqual(spawnImpl.calls[0].options, { ...OPTIONS, env });
 });
 
@@ -167,6 +167,6 @@ test('openInEditor: requireFile=false 时允许打开尚不存在的文件（工
   const exists = (candidate) => candidate === VSCODE; // 只有 VS Code 存在，目标文件不存在
   const result = openInEditor(file, { platform: 'win32', env, exists, spawnImpl, requireFile: false });
 
-  assert.deepEqual(result, { openedWith: 'vscode', command: VSCODE, args: ['-n', file] });
+  assert.deepEqual(result, { openedWith: 'vscode', command: VSCODE, args: ['-r', '-g', `${file}:1`] });
   assert.equal(spawnImpl.calls.length, 1);
 });
