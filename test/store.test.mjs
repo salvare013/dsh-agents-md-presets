@@ -253,6 +253,17 @@ test("新建预设可以先不写正文，等编辑器来填", async () => {
   await fs.rm(base, { recursive: true, force: true });
 });
 
+test("列表按创建时间排序，改名不会把条目顶到最前面", async () => {
+  const { base, instance } = await freshStore();
+  const a = await instance.createPreset({ name: "A", content: "a\n" });
+  const b = await instance.createPreset({ name: "B", content: "b\n" });
+  const c = await instance.createPreset({ name: "C", content: "c\n" });
+  assert.deepEqual((await instance.listPresets()).map((meta) => meta.id), [c.id, b.id, a.id]);
+  await instance.updatePreset(a.id, { name: "A2", description: "改过" });
+  assert.deepEqual((await instance.listPresets()).map((meta) => meta.id), [c.id, b.id, a.id]);
+  await fs.rm(base, { recursive: true, force: true });
+});
+
 test("currentState 在文件不存在时给出 exists=false、source=workspace", async () => {
   const { base, ws, instance } = await freshStore();
   const state = await instance.currentState(ws);
