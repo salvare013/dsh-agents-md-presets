@@ -48,15 +48,23 @@ $DSH_HOME/prompt-presets/
 
 ## 安装
 
+插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）：
+
 ```powershell
-dsh plugin add D:\code\dsh-plugins\dsh-prompt-presets
+# 桌面端 profile（例）
+dsh plugin --profile desktop add D:\code\dsh-plugins\dsh-prompt-presets
+
+# 自己新建的 profile 没有 web 载体时，先从内置 web 配置派生一份再装：
+dsh --profile myweb --from-default-profile web --dump-config
+dsh plugin --profile myweb add D:\code\dsh-plugins\dsh-prompt-presets
+dsh --profile myweb --port 39123 --no-open
 ```
 
-或在插件市场/本地 bundle 里安装这个目录。装好后重启 DSH，打开「设置 → AGENTS.md 预设」。
+用 `pnpm`/`link:` 协议安装本地目录时，pnpm 会打印 `peerDependencies` 警告（我们的 peer 依赖全部 optional），不影响安装与运行。装好后重启 DSH，打开「设置 → AGENTS.md 预设」。
 
 ## HTTP 接口（Host 半边）
 
-全部为同源 `POST`，JSON 响应 `{ ok: true, value }` 或 `{ ok: false, error: { code, message } }`：
+全部为同源 `POST`，JSON 响应 `{ ok: true, value }` 或 `{ ok: false, error: { code, message } }`。**所有路由都要求浏览器身份**：与内置 `/api` 网关一致，每次请求先过 `connection.admit(request)`——非可信来源（跨站 origin、异域 Host）返回 `403 forbidden`；可信但未认证（没有 HttpOnly 会话 cookie，比如 curl 直调）返回 `401 unauthorized`。浏览器访问过带 token 的实例地址后，同源 fetch 自动带上 cookie，无需额外处理。
 
 | 路径 | 作用 |
 | --- | --- |
@@ -73,12 +81,12 @@ dsh plugin add D:\code\dsh-plugins\dsh-prompt-presets
 
 工作区解析顺序：显式 `workspacePath` → `sessions.get(sessionId).header.cwd` → `workingDirectory`。
 
-未注册的 `/api/*` 路径会先被宿主 API 网关拦成 `401 unauthorized`（纯文本），所以调试时看到 401 不代表路由写错了；已注册路由用错方法才是 `405`。
+未注册的 `/api/*` 路径会先被宿主 API 网关拦成 `401`（纯文本，内容是「dsh web authentication required; reopen the URL printed by dsh web.」），所以调试时看到 401 不一定是本插件；本插件已注册路由返回的 `401` 是 `unauthorized`，`403` 是 `forbidden`，用错方法才是 `405`。
 
 ## 开发
 
 ```powershell
-npm test          # store / workspace / editor / host / integration / client 六组测试，纯 Node，无需浏览器（当前 48 个用例）
+npm test          # store / workspace / editor / host / integration / client 六组测试，纯 Node，无需浏览器（当前 56 个用例）
 npm run check     # 语法检查
 ```
 
@@ -88,7 +96,7 @@ npm run check     # 语法检查
 
 ## 局限
 
-- 预设正文上限 64 KiB（与 `agent-instructions` 的 `maxBytes` 一致）。
+- 预设正文上限 64 KiB（与 `agent-instructions` 的 `maxBytes` 一致）。名称/说明的长度按 JS `length`（UTF-16 code units，含 emoji 的字符串会数得偏多）计算，正文按 UTF-8 字节计算。
 - 正文只能在外部编辑器里改：设置页与会话面板都不提供内嵌文本框（收起面板会丢草稿），改完记得点「刷新」。
 - 「在侧栏预览」调用 web 端的 `sidebarRight` 服务（`ctx.get("sidebarRight").openResource`）；宿主没提供右侧栏时面板会提示「右侧栏预览不可用」，此时仍可用「编辑」在外部编辑器里看全文。
 - 预设名称唯一：新建或改名撞名时返回 `409 name-taken`，界面直接显示已存在的名字。
@@ -97,11 +105,15 @@ npm run check     # 语法检查
 - 不带工作区的会话（如纯聊天草稿）无法应用，面板会给出提示。
 - 工作区还没有 `AGENTS.md` 时，面板的「存为全局预设」不可用（避免把空内容存成 0 字节预设）；先应用预设或点「编辑」写入内容。
 - 覆盖前的原文只保留**最近一份**（`backup/<workspaceKey>.md`），没有历史列表与一键回滚；需要多个版本请把内容另存为预设。
+- 已应用的预设被删除后，工作区文件保持不变，面板会标成「<预设名>（预设已删除）」；此时把文件「存为全局预设」即可重建同名条目。
 - 会话中途切换预设后，内置加载器会把新内容作为增量指令重新注入；但若该会话已经跑完、只是历史记录，重新进入会话才会看到新内容。
 - 本次端到端验证用的是隔离的 web 实例，没有登录模型账号，所以**没有观测到真实模型调用**；「注入后模型是否真的照做」属于 DSH 内置 `agent-instructions` 的行为，本插件只保证把文件写对。
 
 ## 健壮性
 
 - 索引是「读改写」操作，进程内全局串行排队；同一工作区的写入也按工作区串行，两个请求同时改不会互相覆盖。
-- 索引 JSON 损坏时会先改名成 `presets.json.corrupt-<时间戳>` 再继续；连改名都失败则直接报错停写，不会静默清空。
+- 索引 JSON 损坏时会先改名成 `presets.json.corrupt-<时间戳>` 再继续；连改名都失败则直接报错停写，不会静默清空。索引里缺 id/名称的畸形条目会被剔除并另存 `presets.json.dropped-<时间戳>` 备份，不会无声丢数据。
 - 覆盖前先写备份：备份失败就不动用户文件。
+- 数据目录不可用时 `init()` 报 `root-unavailable`（带目录路径），而不是裸的文件系统错误；init 时会顺带清理 24 小时以前的 `.tmp-` 写临时文件。
+- 「应用」缺工作区参数、预设正文被外部改大等错误都会归一成 400 级的 `PresetError`（`workspace-unresolved` / `preset-too-large` / `preset-not-found`），不会 500。
+- 「修改预设」写完正文但写索引失败时，会先把正文回滚成旧内容再抛错，避免「旧索引指向新正文」的漂移窗口。

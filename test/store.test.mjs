@@ -273,3 +273,121 @@ test("currentState 在文件不存在时给出 exists=false、source=workspace",
   assert.equal(state.current.source, "workspace");
   await fs.rm(base, { recursive: true, force: true });
 });
+
+test("applyPreset 缺 workspacePath 是 400 workspace-unresolved，而不是 TypeError 500", async () => {
+  const { base, instance } = await freshStore();
+  const preset = await instance.createPreset({ name: "守卫", content: "x\n" });
+  await assert.rejects(
+    async () => instance.applyPreset({ presetId: preset.id }),
+    (error) => error instanceof PresetError && error.code === "workspace-unresolved" && error.status === 400,
+  );
+  await assert.rejects(
+    async () => instance.applyPreset({ workspacePath: "   ", presetId: preset.id }),
+    (error) => error.code === "workspace-unresolved",
+  );
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("预设删除后：文件没动过 → source=deleted；被人改过 → custom", async () => {
+  const { base, ws, instance } = await freshStore();
+  const preset = await instance.createPreset({ name: "会消失", content: "# gone\n" });
+  await instance.applyPreset({ workspacePath: ws, presetId: preset.id });
+  await instance.deletePreset(preset.id);
+
+  const untouched = await instance.currentState(ws);
+  assert.equal(untouched.current.source, "deleted");
+  assert.equal(untouched.current.presetId, null);
+  assert.equal(untouched.current.name, "会消失");
+  assert.equal(untouched.current.description, null);
+
+  await instance.createPreset({ name: "别的", content: "other\n" });
+  const edited = await instance.currentState(ws);
+  assert.equal(edited.current.source, "deleted", "内容仍等于 state.sha1 时即使有新预设也保持 deleted");
+
+  await fs.writeFile(path.join(ws, "AGENTS.md"), "# gone\n- 手工补一条\n");
+  const changed = await instance.currentState(ws);
+  assert.equal(changed.current.source, "custom");
+  assert.equal(changed.current.name, "会消失（会话内修改）");
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("同内容两个预设：归属跟随最后应用的预设", async () => {
+  const { base, ws, instance } = await freshStore();
+  const a = await instance.createPreset({ name: "tie-a", content: "SAME\n" });
+  const b = await instance.createPreset({ name: "tie-b", content: "SAME\n" });
+  // 没 apply 过：按索引顺序归到先创建的那个。
+  const before = await instance.currentState(ws);
+  await fs.writeFile(path.join(ws, "AGENTS.md"), "SAME\n");
+  const neutral = await instance.currentState(ws);
+  assert.equal(neutral.current.source, "preset");
+  assert.equal(neutral.current.presetId, a.id);
+  assert.notEqual(before.current.presetId, undefined);
+
+  await instance.applyPreset({ workspacePath: ws, presetId: b.id });
+  const after = await instance.currentState(ws);
+  assert.equal(after.current.source, "preset");
+  assert.equal(after.current.presetId, b.id, "内容相同时应归属 state 里最后应用的预设");
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("updatePreset 补正文会清掉 missing 标记", async () => {
+  const { base, instance } = await freshStore();
+  const draft = await instance.createPreset({ name: "草稿2", content: "" });
+  await fs.rm(path.join(base, "data", "presets", `${draft.id}.md`));
+  const synced = await instance.syncPresets();
+  assert.equal(synced.find((item) => item.id === draft.id).missing, true);
+
+  const updated = await instance.updatePreset(draft.id, { content: "# 有正文了\n" });
+  assert.equal(updated.missing, undefined);
+  const listed = await instance.syncPresets();
+  assert.equal(listed.find((item) => item.id === draft.id).missing, undefined);
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("畸形索引条目被备份成 .dropped-*，且同一批只备份一次", async () => {
+  const { base, dataRoot, instance } = await freshStore();
+  const indexFile = path.join(dataRoot, "presets.json");
+  await fs.writeFile(
+    indexFile,
+    JSON.stringify({ version: 1, presets: [
+      { id: "good", name: "good", file: "good.md", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", bytes: 0, sha1: "x" },
+      { id: 123, name: "数字 id" },
+      null,
+    ] }),
+    "utf8",
+  );
+  const listed = await instance.listPresets();
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].id, "good");
+
+  let dropped = (await fs.readdir(dataRoot)).filter((name) => name.startsWith("presets.json.dropped-"));
+  assert.equal(dropped.length, 1, "畸形条目应生成一份备份");
+
+  // 第二次读不再追加备份。
+  await instance.listPresets();
+  dropped = (await fs.readdir(dataRoot)).filter((name) => name.startsWith("presets.json.dropped-"));
+  assert.equal(dropped.length, 1);
+
+  // 正常写入后索引不再包含畸形条目，备份仍在。
+  await instance.createPreset({ name: "good-2", content: "" });
+  assert.equal((await instance.listPresets()).length, 2);
+  dropped = (await fs.readdir(dataRoot)).filter((name) => name.startsWith("presets.json.dropped-"));
+  assert.equal(dropped.length, 1);
+  await fs.rm(base, { recursive: true, force: true });
+});
+
+test("init 清理超过 24 小时的 .tmp- 残留，新的保留", async () => {
+  const { base, dataRoot } = await freshStore();
+  const stale = path.join(dataRoot, ".presets.json.tmp-" + "a".repeat(12));
+  const fresh = path.join(dataRoot, ".presets.json.tmp-" + "b".repeat(12));
+  await fs.writeFile(stale, "stale");
+  await fs.writeFile(fresh, "fresh");
+  const old = new Date(Date.now() - 26 * 60 * 60 * 1000);
+  await fs.utimes(stale, old, old);
+
+  const instance = new PresetStore({ root: dataRoot });
+  await instance.init();
+  assert.equal(await fs.stat(stale).then(() => true, () => false), false, "过期 tmp 应被清理");
+  assert.equal(await fs.stat(fresh).then(() => true, () => false), true, "新 tmp 应保留");
+  await fs.rm(base, { recursive: true, force: true });
+});

@@ -102,6 +102,72 @@ test("state：没有工作区时只返回预设清单", async () => {
   assert.equal(json.value.limits.maxBytes, 4096);
 });
 
+test("state：传入的目录不存在时降级为 workspace=null，而不是 400", async () => {
+  const vanished = path.join(workspace, "vanished-dir");
+  const { status, json } = await call("state", { workspacePath: vanished });
+  assert.equal(status, 200);
+  assert.equal(json.ok, true);
+  assert.equal(json.value.workspace, null);
+  assert.equal(json.value.current, null);
+  assert.deepEqual(json.value.presets, []);
+});
+
+test("connection.admit 校验：拒绝时用内置网关同样的 401/403 纯文本", async () => {
+  const routes401 = makeHandler({
+    handler: routes[`${API_PREFIX}/state`],
+    ready,
+    log: () => {},
+    connection: { admit: () => ({ rejection: 401 }) },
+  });
+  const denied401 = fakeResponse();
+  await routes401(fakeRequest("POST", {}), denied401);
+  assert.equal(denied401.status, 401);
+  assert.equal(denied401.text, "unauthorized");
+  assert.equal(denied401.headers["content-type"], "text/plain; charset=utf-8");
+  assert.equal(denied401.headers["cache-control"], "no-store");
+  assert.equal(denied401.headers["x-content-type-options"], "nosniff");
+
+  const routes403 = makeHandler({
+    handler: routes[`${API_PREFIX}/state`],
+    ready,
+    log: () => {},
+    connection: { admit: () => ({ rejection: 403 }) },
+  });
+  const denied403 = fakeResponse();
+  await routes403(fakeRequest("POST", {}), denied403);
+  assert.equal(denied403.status, 403);
+  assert.equal(denied403.text, "forbidden");
+
+  // admit 抛异常：按网关语义宁可拒绝，也不放行。
+  const routesBoom = makeHandler({
+    handler: routes[`${API_PREFIX}/state`],
+    ready,
+    log: () => {},
+    connection: {
+      admit: () => {
+        throw new Error("admit crashed");
+      },
+    },
+  });
+  const boom = fakeResponse();
+  await routesBoom(fakeRequest("POST", {}), boom);
+  assert.equal(boom.status, 403);
+  assert.equal(boom.text, "forbidden");
+
+  // 放行时返回 admission 原值，handler 正常执行。
+  const peer = { id: "peer-1" };
+  const routesOpen = makeHandler({
+    handler: routes[`${API_PREFIX}/state`],
+    ready,
+    log: () => {},
+    connection: { admit: () => ({ peer }) },
+  });
+  const allowed = fakeResponse();
+  await routesOpen(fakeRequest("POST", {}), allowed);
+  assert.equal(allowed.status, 200);
+  assert.equal(JSON.parse(allowed.text).ok, true);
+});
+
 test("create / read / update / delete 走完整链路", async () => {
   const created = await call("preset/create", { name: "前端", description: "ui", content: "# ui rules\n" });
   assert.equal(created.status, 200);
