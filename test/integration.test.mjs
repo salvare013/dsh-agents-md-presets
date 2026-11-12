@@ -83,7 +83,7 @@ function assertErrorEnvelope(result, label, status, code) {
 }
 
 before(async () => {
-  base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-prompt-presets-integration-"));
+  base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-agents-md-presets-integration-"));
   root = path.join(base, "data");
   workspace = path.join(base, "ws");
   await fs.mkdir(workspace, { recursive: true });

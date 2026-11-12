@@ -79,7 +79,7 @@ async function readTarget() {
 }
 
 before(async () => {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-prompt-presets-http-"));
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-agents-md-presets-http-"));
   root = path.join(base, "data");
   workspace = path.join(base, "ws");
   await fs.mkdir(workspace, { recursive: true });

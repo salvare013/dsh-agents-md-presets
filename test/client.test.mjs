@@ -37,7 +37,7 @@ function boot() {
   };
   vm.runInNewContext(source, sandbox, { filename: "lib/client.js" });
   assert.ok(definition, "client.js 应当调用 window.__ModuleLoader__.load");
-  assert.equal(definition.id, "@local/dsh-prompt-presets");
+  assert.equal(definition.id, "@local/dsh-agents-md-presets");
 
   const moduleExports = definition.factory((name) => {
     if (name === "react") return fakeReact;
@@ -74,8 +74,8 @@ test("apply() 注册设置页与会话预设条", () => {  const exported = boot
   const dock = registrations.find((item) => item.options.name === "conversation.input.dock");
   assert.ok(settings, "应注册 settings.section");
   assert.ok(dock, "应注册 conversation.input.dock");
-  assert.equal(settings.options.id, "prompt-presets");
-  assert.equal(dock.options.id, "prompt-presets.session");
+  assert.equal(settings.options.id, "agents-md-presets");
+  assert.equal(dock.options.id, "agents-md-presets.session");
   assert.equal(settings.options.label(), "AGENTS.md 预设");
   assert.equal(typeof settings.component, "function");
   assert.equal(typeof dock.component, "function");

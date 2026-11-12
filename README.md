@@ -1,4 +1,4 @@
-# AGENTS.md 预设（@local/dsh-prompt-presets）
+# AGENTS.md 预设（@local/dsh-agents-md-presets）
 
 给 DSH 加一套「预设 → 工作区 AGENTS.md」的管理与切换能力：
 
@@ -8,7 +8,7 @@
 - **覆盖确认**：当前文件不是「正在生效的预设原文」时（工作区自带 / 会话内修改 / 预设已删除），点「应用」先弹确认框（「取消」/「确认覆盖」），提示覆盖后原内容不可找回、请自行留档；同一预设重复应用、工作区还没有文件时不弹。
 - **最近一份备份**：每次覆盖前把原文件留一份到数据目录，覆盖属于兜底，不是界面上的回滚功能。
 
-预设存在 DSH 数据目录（`$DSH_HOME/prompt-presets/`，默认 `~/.dsh/prompt-presets/`），跨工作区共享；只有真正「应用」时才碰工作区文件，不往仓库里塞任何东西。
+预设存在 DSH 数据目录（`$DSH_HOME/prompt-presets/`，默认 `~/.dsh/prompt-presets/`；目录名沿用插件旧名，改名后保持不变，已有预设不会丢），跨工作区共享；只有真正「应用」时才碰工作区文件，不往仓库里塞任何东西。
 
 编辑一律走外部编辑器，是因为当前的 DSH 前端没有可用的原生文件编辑框：bundle 里没有 Monaco / CodeMirror，`workspaceFiles` 只有读接口，右侧栏文档预览只读。VS Code 用 `-r -g <file>:1` 复用已打开的窗口，冷启动比新开窗口快。
 
@@ -49,21 +49,21 @@ $DSH_HOME/prompt-presets/
 
 ## 安装
 
-插件已发布在 GitHub：`salvare013/dsh-prompt-presets`（公开仓库，`v0.x.x` tag 对应每个版本）。插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）。
+插件已发布在 GitHub：`salvare013/dsh-agents-md-presets`（公开仓库，`v0.x.x` tag 对应每个版本）。插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）。
 
 ```powershell
-# 从 GitHub 安装最新 main（推荐；pnpm 会把依赖记成 github:salvare013/dsh-prompt-presets）
-dsh plugin --profile <name> add https://github.com/salvare013/dsh-prompt-presets.git
+# 从 GitHub 安装最新 main（推荐；pnpm 会把依赖记成 github:salvare013/dsh-agents-md-presets）
+dsh plugin --profile <name> add https://github.com/salvare013/dsh-agents-md-presets.git
 
 # 或锁到某个版本（tag 名即版本）
-dsh plugin --profile <name> add "github:salvare013/dsh-prompt-presets#v0.6.0"
+dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v0.6.0"
 ```
 
 自己新建的 profile 没有 web 载体时，先从内置 web 配置派生一份再装：
 
 ```powershell
 dsh --profile myweb --from-default-profile web --dump-config
-dsh plugin --profile myweb add "github:salvare013/dsh-prompt-presets#v0.6.0"
+dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.6.0"
 dsh --profile myweb --port 39123 --no-open
 ```
 
@@ -77,16 +77,16 @@ dsh --profile myweb --port 39123 --no-open
 
 | 路径 | 作用 |
 | --- | --- |
-| `/api/dsh-prompt-presets/state` | 预设清单 + 工作区当前状态（`workspacePath` 或 `sessionId` 二选一） |
-| `/api/dsh-prompt-presets/preset/read` | 读取预设正文 |
-| `/api/dsh-prompt-presets/preset/create` | 新建 |
-| `/api/dsh-prompt-presets/preset/update` | 修改名称/说明/正文 |
-| `/api/dsh-prompt-presets/preset/delete` | 删除 |
-| `/api/dsh-prompt-presets/apply` | 应用预设到工作区 |
-| `/api/dsh-prompt-presets/preset/sync` | 按磁盘上的预设文件重算索引（外部编辑器改完后用） |
-| `/api/dsh-prompt-presets/preset/open` | 用本机编辑器打开预设文件（VS Code 优先，否则系统默认程序） |
-| `/api/dsh-prompt-presets/workspace/read` | 读取工作区当前生效的 `AGENTS.md` |
-| `/api/dsh-prompt-presets/workspace/open` | 用本机编辑器打开工作区 `AGENTS.md`（文件还不存在也能先打开，保存时创建） |
+| `/api/dsh-agents-md-presets/state` | 预设清单 + 工作区当前状态（`workspacePath` 或 `sessionId` 二选一） |
+| `/api/dsh-agents-md-presets/preset/read` | 读取预设正文 |
+| `/api/dsh-agents-md-presets/preset/create` | 新建 |
+| `/api/dsh-agents-md-presets/preset/update` | 修改名称/说明/正文 |
+| `/api/dsh-agents-md-presets/preset/delete` | 删除 |
+| `/api/dsh-agents-md-presets/apply` | 应用预设到工作区 |
+| `/api/dsh-agents-md-presets/preset/sync` | 按磁盘上的预设文件重算索引（外部编辑器改完后用） |
+| `/api/dsh-agents-md-presets/preset/open` | 用本机编辑器打开预设文件（VS Code 优先，否则系统默认程序） |
+| `/api/dsh-agents-md-presets/workspace/read` | 读取工作区当前生效的 `AGENTS.md` |
+| `/api/dsh-agents-md-presets/workspace/open` | 用本机编辑器打开工作区 `AGENTS.md`（文件还不存在也能先打开，保存时创建） |
 
 工作区解析顺序：显式 `workspacePath` → `sessions.get(sessionId).header.cwd` → `sessionPersistence.stat(sessionId)` 的持久化 header（老会话不在内存里时用）→ `workingDirectory`。
 

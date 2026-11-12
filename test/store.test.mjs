@@ -30,7 +30,7 @@ async function readState() {
 }
 
 before(async () => {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-prompt-presets-"));
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-agents-md-presets-"));
   root = path.join(base, "data");
   workspace = path.join(base, "ws");
   await fs.mkdir(workspace, { recursive: true });

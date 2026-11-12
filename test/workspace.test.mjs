@@ -8,7 +8,7 @@ import { PresetStore, sha1Of } from "../lib/store.js";
 
 /** 每个用例一个独立数据目录 + 工作区，避免互相污染。 */
 async function freshStore({ maxBytes = 4096, withWorkspace = true } = {}) {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-prompt-presets-ws-"));
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), "dsh-agents-md-presets-ws-"));
   const root = path.join(base, "data");
   const workspace = path.join(base, "ws");
   if (withWorkspace) await fs.mkdir(workspace, { recursive: true });
