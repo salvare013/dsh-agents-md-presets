@@ -20,7 +20,7 @@
 ## 数据布局
 
 ```
-$DSH_HOME/agents-md-presets/         # 旧版的 prompt-presets/ 不再读取
+$DSH_HOME/agents-md-presets/
 ├── presets.json                     # 索引：id / 名称 / 说明 / 字节数 / sha1 / 时间
 ├── presets/<id>.md                  # 预设正文
 ├── state/<workspaceKey>.json        # 该工作区最后应用了哪个预设
@@ -31,7 +31,7 @@ $DSH_HOME/agents-md-presets/         # 旧版的 prompt-presets/ 不再读取
 
 ## 安装
 
-插件发布在 GitHub：`salvare013/dsh-agents-md-presets`。0.7.0 起包名与仓库名从 `dsh-prompt-presets` 改过来，旧地址会自动重定向。0.7.1 起数据目录也换成 `$DSH_HOME/agents-md-presets/`，旧目录不做迁移。
+插件发布在 GitHub：`salvare013/dsh-agents-md-presets`，当前版本 **v1.0.0**。数据统一放在 `$DSH_HOME/agents-md-presets/`，布局见上文「数据布局」。
 
 ```powershell
 # 最新 main
