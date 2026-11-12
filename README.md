@@ -38,14 +38,14 @@ $DSH_HOME/agents-md-presets/         # 旧版的 prompt-presets/ 不再读取
 dsh plugin --profile <name> add https://github.com/salvare013/dsh-agents-md-presets.git
 
 # 锁到某个版本
-dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v0.7.1"
+dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v1.0.0"
 ```
 
 `--profile` 必填。自建 profile 没有 web 载体时，先从内置 web 配置派生：
 
 ```powershell
 dsh --profile myweb --from-default-profile web --dump-config
-dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.7.1"
+dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v1.0.0"
 dsh --profile myweb --port 39123 --no-open
 ```
 
