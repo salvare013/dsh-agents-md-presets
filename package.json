@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-agents-md-presets",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "description": "Named AGENTS.md presets for DSH: apply one per conversation, edit bodies in your own editor, and keep one rolling backup of the previous file.",
   "license": "MIT",

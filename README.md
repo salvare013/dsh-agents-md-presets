@@ -20,7 +20,7 @@
 ## 数据布局
 
 ```
-$DSH_HOME/prompt-presets/            # 目录名沿用旧版插件名
+$DSH_HOME/agents-md-presets/         # 旧版的 prompt-presets/ 不再读取
 ├── presets.json                     # 索引：id / 名称 / 说明 / 字节数 / sha1 / 时间
 ├── presets/<id>.md                  # 预设正文
 ├── state/<workspaceKey>.json        # 该工作区最后应用了哪个预设
@@ -31,21 +31,21 @@ $DSH_HOME/prompt-presets/            # 目录名沿用旧版插件名
 
 ## 安装
 
-插件发布在 GitHub：`salvare013/dsh-agents-md-presets`。0.7.0 起包名与仓库名从 `dsh-prompt-presets` 改过来，旧地址会自动重定向；数据目录与本地开发目录名没变，已有预设不受影响。
+插件发布在 GitHub：`salvare013/dsh-agents-md-presets`。0.7.0 起包名与仓库名从 `dsh-prompt-presets` 改过来，旧地址会自动重定向。0.7.1 起数据目录也换成 `$DSH_HOME/agents-md-presets/`，旧目录不做迁移；本地开发目录名仍是 `dsh-prompt-presets`。
 
 ```powershell
 # 最新 main
 dsh plugin --profile <name> add https://github.com/salvare013/dsh-agents-md-presets.git
 
 # 锁到某个版本
-dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v0.7.0"
+dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v0.7.1"
 ```
 
 `--profile` 必填。自建 profile 没有 web 载体时，先从内置 web 配置派生：
 
 ```powershell
 dsh --profile myweb --from-default-profile web --dump-config
-dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.7.0"
+dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.7.1"
 dsh --profile myweb --port 39123 --no-open
 ```
 
