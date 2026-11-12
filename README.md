@@ -31,10 +31,13 @@ $DSH_HOME/agents-md-presets/
 
 ## 安装
 
-插件发布在 GitHub：`salvare013/dsh-agents-md-presets`，当前版本 **v1.0.0**。数据统一放在 `$DSH_HOME/agents-md-presets/`，布局见上文「数据布局」。
+插件发布在 npm：`dsh-agents-md-presets`，源码在 GitHub：`salvare013/dsh-agents-md-presets`，当前版本 **v1.0.0**。数据统一放在 `$DSH_HOME/agents-md-presets/`，布局见上文「数据布局」。
 
 ```powershell
-# 最新 main
+# 从 npm 安装（推荐）
+dsh plugin --profile <name> add dsh-agents-md-presets
+
+# 或从 GitHub 最新 main
 dsh plugin --profile <name> add https://github.com/salvare013/dsh-agents-md-presets.git
 
 # 锁到某个版本
