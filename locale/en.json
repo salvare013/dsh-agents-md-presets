@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "AGENTS.md Presets",
-    "description": "Keep named AGENTS.md presets and apply one from a conversation. Edit bodies in your own editor; each overwrite keeps the previous file as a backup."
+    "description": "Keep named AGENTS.md presets and apply one from a conversation. Edit bodies in your own editor; each overwrite leaves the previous file in the data directory."
   }
 }

@@ -5,7 +5,7 @@
 - **设置 → AGENTS.md 预设**：新建、重命名、删除多个具名预设（Markdown 正文，上限 64 KiB）。删除会先弹出确认框（「取消」/「确认删除」），不会在卡片上直接生效；列表按创建时间从新到旧排列，改名或改说明都不会让条目跳到首行。正文**只用本机编辑器改**：新建时填完名称和说明点「创建并打开编辑器」，插件会用本机 VS Code（没有则退回系统默认程序）打开预设文件，写完保存、点「刷新」即可；卡片上的「重命名 / 说明」只改元数据，点开后**在原卡片里就地编辑**。名称不允许重复（忽略大小写与首尾空格）。
 - **会话输入框上方**：每个会话选一个预设并「应用」，把它写进该会话工作区的 `AGENTS.md`；工作区里还没有这个文件时会直接创建。预设下拉用的是浏览器原生 `<select>`，列表随系统滚动，不会顶出屏幕。
 - **点「当前：…」看名称与说明**：面板只显示当前生效文件的名称、说明、来源与字节数，不内嵌正文；正文用「在侧栏预览」交给 DSH 内置的右侧栏 markdown 预览打开（`dsh-resource://file/session/<会话>/AGENTS.md`，由 `@deepseek-ai/dsh-client-ui-sidebar-documentpreview` 渲染）。「编辑」用本机编辑器打开这个文件，保存后回到面板点「刷新」；改的是工作区文件，全局预设不动，也能把当前内容「存为全局预设」（工作区还没有文件时该按钮不可用）。**面板打开期间会自动跟进外部改动**：窗口重新获得焦点、标签页切回可见、或每 5 秒静默轮询（仅页面可见时），不点亮按钮、失败不弹错；面板关着时不做任何后台检测，点「应用」时再强制重读一次（判定基于点击瞬间的文件状态）。
-- **覆盖确认**：当前文件不是「正在生效的预设原文」时（工作区自带 / 会话内修改 / 预设已删除），点「应用」先弹确认框（「取消」/「确认覆盖」），提示覆盖后原内容不可找回、请自行留档；同一预设重复应用、工作区还没有文件时不弹。
+- **覆盖确认**：当前文件不是「正在生效的预设原文」时（工作区自带 / 会话内修改 / 预设已删除），点「应用」先弹确认框（「取消」/「确认覆盖」），提示覆盖后界面里无法找回（只有数据目录 `backup/` 下一份最近原文）、需要留档请先复制；同一预设重复应用、工作区还没有文件时不弹。
 - **最近一份备份**：每次覆盖前把原文件留一份到数据目录，覆盖属于兜底，不是界面上的回滚功能。
 
 预设存在 DSH 数据目录（`$DSH_HOME/prompt-presets/`，默认 `~/.dsh/prompt-presets/`；目录名沿用插件旧名，改名后保持不变，已有预设不会丢），跨工作区共享；只有真正「应用」时才碰工作区文件，不往仓库里塞任何东西。
@@ -49,25 +49,25 @@ $DSH_HOME/prompt-presets/
 
 ## 安装
 
-插件已发布在 GitHub：`salvare013/dsh-agents-md-presets`（公开仓库，`v0.x.x` tag 对应每个版本）。插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）。
+插件已发布在 GitHub：`salvare013/dsh-agents-md-presets`（公开仓库，`v0.x.x` tag 对应每个版本）。0.7.0 起包名与仓库名从 `dsh-prompt-presets` 改成现在这个，GitHub 旧地址会自动重定向；数据目录 `$DSH_HOME/prompt-presets/` 与本地开发目录名保持不变，已有预设不受影响。插件命令必须带 `--profile`（不带的报错是 `error required option '--profile <name>' not specified`）。
 
 ```powershell
 # 从 GitHub 安装最新 main（推荐；pnpm 会把依赖记成 github:salvare013/dsh-agents-md-presets）
 dsh plugin --profile <name> add https://github.com/salvare013/dsh-agents-md-presets.git
 
 # 或锁到某个版本（tag 名即版本）
-dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v0.6.0"
+dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v0.7.0"
 ```
 
 自己新建的 profile 没有 web 载体时，先从内置 web 配置派生一份再装：
 
 ```powershell
 dsh --profile myweb --from-default-profile web --dump-config
-dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.6.0"
+dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.7.0"
 dsh --profile myweb --port 39123 --no-open
 ```
 
-本地开发仍可用目录安装（改 `lib/` 即时生效）：`dsh plugin --profile <name> add D:\code\dsh-plugins\dsh-prompt-presets`。
+本地开发仍可用目录安装（改 `lib/` 即时生效）：`dsh plugin --profile <name> add D:\code\dsh-plugins\dsh-prompt-presets`（这个目录名仍是插件旧名，没跟着改）。
 
 用 `pnpm` 安装本地目录（`link:` 协议）时会打印 `peerDependencies` 警告（我们的 peer 依赖全部 optional），不影响安装与运行。装好后重启 DSH，打开「设置 → AGENTS.md 预设」。
 

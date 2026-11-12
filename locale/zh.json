@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "AGENTS.md 预设",
-    "description": "保存多套命名的 AGENTS.md 预设，在会话里一键应用；正文用本机编辑器改，覆盖前留一份备份。"
+    "description": "保存多套命名的 AGENTS.md 预设，在会话里一键应用；正文用本机编辑器改，覆盖前把上一份原文留在数据目录里。"
   }
 }
