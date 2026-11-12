@@ -88,14 +88,14 @@ dsh --profile myweb --port 39123 --no-open
 | `/api/dsh-prompt-presets/workspace/read` | 读取工作区当前生效的 `AGENTS.md` |
 | `/api/dsh-prompt-presets/workspace/open` | 用本机编辑器打开工作区 `AGENTS.md`（文件还不存在也能先打开，保存时创建） |
 
-工作区解析顺序：显式 `workspacePath` → `sessions.get(sessionId).header.cwd` → `workingDirectory`。
+工作区解析顺序：显式 `workspacePath` → `sessions.get(sessionId).header.cwd` → `sessionPersistence.stat(sessionId)` 的持久化 header（老会话不在内存里时用）→ `workingDirectory`。
 
 未注册的 `/api/*` 路径会先被宿主 API 网关拦成 `401`（纯文本，内容是「dsh web authentication required; reopen the URL printed by dsh web.」），所以调试时看到 401 不一定是本插件；本插件已注册路由返回的 `401` 是 `unauthorized`，`403` 是 `forbidden`，用错方法才是 `405`。
 
 ## 开发
 
 ```powershell
-npm test          # store / workspace / editor / host / integration / client 六组测试，纯 Node，无需浏览器（当前 56 个用例）
+npm test          # store / workspace / editor / host / integration / client 六组测试，纯 Node，无需浏览器（当前 58 个用例）
 npm run check     # 语法检查
 ```
 

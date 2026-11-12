@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 
-import { API_PREFIX, createRoutes, makeHandler } from "../lib/http.js";
+import { API_PREFIX, createRoutes, makeHandler, resolveWorkspacePath } from "../lib/http.js";
 import { PresetStore } from "../lib/store.js";
 
 let root;
@@ -324,4 +324,50 @@ test("同名预设：新建与改名都返回 409 name-taken", async () => {
   const empty = await call("preset/create", { name: "空白草稿", description: "待写" });
   assert.equal(empty.status, 200);
   assert.equal(empty.json.value.preset.bytes, 0);
+});
+
+test("老会话不在内存里时用 sessionPersistence.stat 的 header.cwd 定位工作区", async () => {
+  const seen = [];
+  const persistence = {
+    async stat(id) {
+      seen.push(id);
+      if (id === "sess-old") return { header: { cwd: workspace } };
+      if (id === "sess-flat") return { cwd: workspace };
+      throw new Error("boom");
+    },
+  };
+  const offline = {
+    get(key) {
+      if (key === "sessions") return { get: () => undefined };
+      if (key === "sessionPersistence") return persistence;
+      return undefined;
+    },
+  };
+
+  assert.equal(await resolveWorkspacePath(offline, { sessionId: "sess-old" }), workspace);
+  assert.equal(await resolveWorkspacePath(offline, { sessionId: "sess-flat" }), workspace);
+  await assert.rejects(
+    () => resolveWorkspacePath(offline, { sessionId: "sess-broken" }),
+    (error) => error.code === "workspace-unresolved",
+  );
+  assert.deepEqual(seen, ["sess-old", "sess-flat", "sess-broken"]);
+});
+
+test("state 对老会话也能返回工作区与 current", async () => {
+  const offline = {
+    get(key) {
+      if (key === "sessions") return { get: () => undefined };
+      if (key === "sessionPersistence") return { stat: async () => ({ header: { cwd: workspace } }) };
+      return undefined;
+    },
+  };
+  await fs.writeFile(path.join(workspace, "AGENTS.md"), "# 老会话内容\n", "utf8");
+  const offlineRoutes = createRoutes({ ctx: offline, store, ready });
+  const handler = makeHandler({ handler: offlineRoutes[`${API_PREFIX}/state`], ready, log: () => {} });
+  const response = fakeResponse();
+  await handler(fakeRequest("POST", { sessionId: "sess-old" }), response);
+  assert.equal(response.status, 200);
+  const body = JSON.parse(response.text);
+  assert.equal(body.value.workspace.path, path.resolve(workspace));
+  assert.equal(body.value.current.exists, true);
 });
