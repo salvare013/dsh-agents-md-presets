@@ -31,7 +31,7 @@ $DSH_HOME/agents-md-presets/         # 旧版的 prompt-presets/ 不再读取
 
 ## 安装
 
-插件发布在 GitHub：`salvare013/dsh-agents-md-presets`。0.7.0 起包名与仓库名从 `dsh-prompt-presets` 改过来，旧地址会自动重定向。0.7.1 起数据目录也换成 `$DSH_HOME/agents-md-presets/`，旧目录不做迁移；本地开发目录名仍是 `dsh-prompt-presets`。
+插件发布在 GitHub：`salvare013/dsh-agents-md-presets`。0.7.0 起包名与仓库名从 `dsh-prompt-presets` 改过来，旧地址会自动重定向。0.7.1 起数据目录也换成 `$DSH_HOME/agents-md-presets/`，旧目录不做迁移。
 
 ```powershell
 # 最新 main
@@ -49,7 +49,7 @@ dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v0.7.1"
 dsh --profile myweb --port 39123 --no-open
 ```
 
-本地开发用目录安装（改 `lib/` 即时生效）：`dsh plugin --profile <name> add D:\code\dsh-plugins\dsh-prompt-presets`。`link:` 安装会打印 `peerDependencies` 警告，不影响运行。装好后重启 DSH。
+本地开发用目录安装（改 `lib/` 即时生效）：`dsh plugin --profile <name> add D:\code\dsh-plugins\dsh-agents-md-presets`。`link:` 安装会打印 `peerDependencies` 警告，不影响运行。装好后重启 DSH。
 
 ## HTTP 接口
 
