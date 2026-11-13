@@ -1,5 +1,5 @@
 {
-  "name": "dsh-agents-md-presets",
+  "name": "@killmemory8/dsh-agents-md-presets",
   "version": "1.0.0",
   "description": "Named AGENTS.md presets for DSH: apply one per conversation, edit bodies in your own editor, and keep one rolling backup of the previous file.",
   "license": "MIT",
@@ -38,6 +38,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
