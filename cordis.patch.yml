@@ -1,7 +1,7 @@
 # AGENTS.md 预设：设置页与会话输入框上方的预设条。
 - insert:
     - id: agents-md-presets
-      name: '@local/dsh-agents-md-presets'
+      name: '@killmemory8/dsh-agents-md-presets'
       config:
         root: ''
         maxBytes: 65536

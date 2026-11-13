@@ -1,6 +1,6 @@
 {
   "name": "@killmemory8/dsh-agents-md-presets",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Named AGENTS.md presets for DSH: apply one per conversation, edit bodies in your own editor, and keep one rolling backup of the previous file.",
   "license": "MIT",
   "repository": {

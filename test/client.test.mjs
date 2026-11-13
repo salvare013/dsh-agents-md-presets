@@ -37,7 +37,7 @@ function boot() {
   };
   vm.runInNewContext(source, sandbox, { filename: "lib/client.js" });
   assert.ok(definition, "client.js 应当调用 window.__ModuleLoader__.load");
-  assert.equal(definition.id, "@local/dsh-agents-md-presets");
+  assert.equal(definition.id, "@killmemory8/dsh-agents-md-presets");
 
   const moduleExports = definition.factory((name) => {
     if (name === "react") return fakeReact;
