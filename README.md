@@ -31,7 +31,7 @@ $DSH_HOME/agents-md-presets/
 
 ## 安装
 
-插件发布在 npm：`@killmemory8/dsh-agents-md-presets`，源码在 GitHub：`salvare013/dsh-agents-md-presets`，当前版本 **v1.0.0**。数据统一放在 `$DSH_HOME/agents-md-presets/`，布局见上文「数据布局」。
+插件发布在 npm：`@killmemory8/dsh-agents-md-presets`，源码在 GitHub：`salvare013/dsh-agents-md-presets`。数据统一放在 `$DSH_HOME/agents-md-presets/`，布局见上文「数据布局」。
 
 ```powershell
 # 从 npm 安装（推荐）
@@ -41,14 +41,14 @@ dsh plugin --profile <name> add @killmemory8/dsh-agents-md-presets
 dsh plugin --profile <name> add https://github.com/salvare013/dsh-agents-md-presets.git
 
 # 锁到某个版本
-dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v1.0.0"
+dsh plugin --profile <name> add "github:salvare013/dsh-agents-md-presets#v1.0.1"
 ```
 
 `--profile` 必填。自建 profile 没有 web 载体时，先从内置 web 配置派生：
 
 ```powershell
 dsh --profile myweb --from-default-profile web --dump-config
-dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v1.0.0"
+dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v1.0.1"
 dsh --profile myweb --port 39123 --no-open
 ```
 
