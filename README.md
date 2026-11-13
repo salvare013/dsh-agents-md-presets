@@ -52,7 +52,7 @@ dsh plugin --profile myweb add "github:salvare013/dsh-agents-md-presets#v1.0.0"
 dsh --profile myweb --port 39123 --no-open
 ```
 
-本地开发用目录安装（改 `lib/` 即时生效）：`dsh plugin --profile <name> add D:\code\dsh-plugins\dsh-agents-md-presets`。`link:` 安装会打印 `peerDependencies` 警告，不影响运行。装好后重启 DSH。
+装好后重启 DSH。
 
 ## HTTP 接口
 
@@ -82,7 +82,7 @@ npm test          # store / workspace / editor / host / integration / client 六
 npm run check     # 语法检查
 ```
 
-DSH 沙箱里 `node --test` 会因管道 spawn 报 `EPERM`，测试用 `node <file>` 直接跑。端到端验证用隔离的 `dsh web` 实例（见 `dsh-plugin-web-test` 技能）。
+DSH 沙箱里 `node --test` 会因管道 spawn 报 `EPERM`，测试用 `node <file>` 直接跑。端到端验证用隔离的 `dsh web` 实例。
 
 ## 局限
 
