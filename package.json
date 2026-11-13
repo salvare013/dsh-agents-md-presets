@@ -1,9 +1,22 @@
 {
-  "name": "@local/dsh-agents-md-presets",
+  "name": "dsh-agents-md-presets",
   "version": "1.0.0",
-  "private": true,
   "description": "Named AGENTS.md presets for DSH: apply one per conversation, edit bodies in your own editor, and keep one rolling backup of the previous file.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/salvare013/dsh-agents-md-presets.git"
+  },
+  "homepage": "https://github.com/salvare013/dsh-agents-md-presets#readme",
+  "bugs": {
+    "url": "https://github.com/salvare013/dsh-agents-md-presets/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "agents-md",
+    "presets"
+  ],
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
